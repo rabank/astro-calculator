@@ -5,7 +5,8 @@ import swisseph as swe
 import math
 from datetime import datetime
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
+
 
 # Настройки
 swe.set_sid_mode(swe.SIDM_LAHIRI)  # Лахири айанамса
