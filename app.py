@@ -41,7 +41,16 @@ def get_nakshatra(longitude):
     index = int((longitude % 360) // step) % 27
     pada  = int(((longitude % step) / (step / 4.0)) + 1)
     return NAKSHATRAS[index], pada
-
+def pack_body(name, lon):
+    nak, pada = get_nakshatra(lon)
+    return {
+        "planet": name,
+        "longitude": round(lon % 360, 2),         # обща дължина
+        "sign": get_sign(lon),                    # знак
+        "sign_degree": round(lon % 30, 2),        # градус ВЪТРЕ в знака (0–30)
+        "nakshatra": nak,
+        "pada": pada
+    }
 @app.route('/calculate', methods=['POST', 'OPTIONS'])
 def calculate():
     if request.method == 'OPTIONS':
