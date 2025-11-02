@@ -1,12 +1,11 @@
-import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-app = Flask(__name__)
-CORS(app)
-
+import os
 import swisseph as swe
 import math
 from datetime import datetime
+app = Flask(__name__)
+CORS(app)
 
 # Настройки
 swe.set_sid_mode(swe.SIDM_LAHIRI)  # Лахири айанамса
