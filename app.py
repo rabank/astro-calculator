@@ -2,6 +2,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 import swisseph as swe
+# Активираме индийската система (сидерална) с Лахири айанамса
+swe.set_sid_mode(swe.SIDM_LAHIRI, 0, 0)
+FLAGS = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
 import math
 from datetime import datetime
 app = Flask(__name__)
@@ -57,7 +60,7 @@ def calculate():
     results = {}
 
     # Асцендент
-    houses, ascmc = swe.houses(jd, lat, lon, b'P')
+    houses, ascmc = swe.houses_ex(jd, FLAGS, lat, lon, b'P')
     asc = ascmc[0] % 360
     results["Ascendant"] = {
         "degree": round(asc, 2),
@@ -78,7 +81,7 @@ def calculate():
 
     planet_data = []
     for pid, name in planets:
-        pos, _ = swe.calc_ut(jd, pid)
+        pos, _ = swe.calc_ut(jd, pid, FLAGS)
         long = pos[0] % 360
         nak, pada = get_nakshatra(long)
         planet_data.append({
