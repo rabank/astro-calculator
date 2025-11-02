@@ -70,7 +70,7 @@ def calculate():
         results = {}
 
         # Асцендент – сидерално (важно: с FLAGS)
-        houses, ascmc = swe.houses_ex(jd, FLAGS, lat, lon, b'P')
+        houses, ascmc = swe.houses_ex(jd, lat, lon, b'P')
         asc = ascmc[0] % 360
         results["Ascendant"] = {
             "degree": round(asc, 2),
