@@ -1,2 +1,4 @@
+Flask==2.3.3
 Flask-Cors==4.0.0
-pyswisseph==2.10.3.2
+swisseph==2.10.3
+tzdata==2023.3
