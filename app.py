@@ -39,8 +39,10 @@ def get_nakshatra(longitude):
     pada = int(((longitude % (360 / 27)) / (360 / 108)) + 1)
     return NAKSHATRAS[index], pada
 
-@app.route('/calculate', methods=['POST'])
+@app.route('/calculate', methods=['POST', 'OPTIONS'])
 def calculate():
+    if request.method == 'OPTIONS':
+        return ('', 204)  # preflight OK
     data = request.json
     date_str = data.get('date')
     time_str = data.get('time')
