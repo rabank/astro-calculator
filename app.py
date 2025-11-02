@@ -99,17 +99,29 @@ def calculate():
         ]
 
         planet_data = []
-        for pid, name in planets:
-            pos, _ = swe.calc_ut(jd, pid, FLAGS)  # сидерално
-            long = pos[0] % 360
-            nak, pada = get_nakshatra(long)
-            planet_data.append({
-                "planet": name,
-                "longitude": round(long, 2),
-                "sign": get_sign(long),
-                "nakshatra": nak,
-                "pada": pada
-            })
+
+        # Светила и планети
+        for pid, name in [
+            (swe.SUN, "Слънце"),
+            (swe.MOON, "Луна"),
+            (swe.MERCURY, "Меркурий"),
+            (swe.VENUS, "Венера"),
+            (swe.MARS, "Марс"),
+            (swe.JUPITER, "Юпитер"),
+            (swe.SATURN, "Сатурн"),
+        ]:
+            pos, _ = swe.calc_ut(jd, pid, FLAGS)
+            lon = pos[0] % 360
+            planet_data.append(pack_body(name, lon))
+
+        # Раху (истински възел)
+        pos_rahu, _ = swe.calc_ut(jd, swe.TRUE_NODE, FLAGS)
+        rahu_lon = pos_rahu[0] % 360
+        planet_data.append(pack_body("Раху", rahu_lon))
+
+        # Кету = Раху + 180°
+        ketu_lon = (rahu_lon + 180.0) % 360
+        planet_data.append(pack_body("Кету", ketu_lon))
 
         results["Planets"] = planet_data
         return jsonify(results)
