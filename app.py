@@ -7,6 +7,12 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
+@app.after_request
+def add_cors_headers(resp):
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    resp.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
+    return resp
 
 # Настройки
 swe.set_sid_mode(swe.SIDM_LAHIRI)  # Лахири айанамса
