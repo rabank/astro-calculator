@@ -3,6 +3,8 @@ services:
     name: astro-calculator
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
-    autoDeploy: true
+    buildCommand: ""
+    startCommand: "python app.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
