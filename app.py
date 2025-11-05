@@ -8,6 +8,96 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
+# 1) Много кратък health чек
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify(ok=True), 200
+
+
+# 2) Диагностичен /debug – връща няколко варианта (Лахири/Раман/KP и true/mean node)
+@app.route('/debug', methods=['GET'])
+def debug():
+    try:
+        # ТЕСТОВИ ВХОД (можеш да ги смениш при нужда)
+        date_str = "1988-05-24"
+        time_str = "12:00"
+        tz_str   = "Europe/Sofia"
+        lat      = 43.2141
+        lon      = 27.9147
+
+        # локално -> UTC
+        dt_local = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo(tz_str))
+        dt_utc   = dt_local.astimezone(timezone.utc)
+        ut_hour  = dt_utc.hour + dt_utc.minute/60 + dt_utc.second/3600
+        jd       = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)
+
+        def compute_variant(label, ayanamsha_const, node_is_true):
+            swe.set_sid_mode(ayanamsha_const)
+
+            # Асцендент
+            houses, ascmc = swe.houses_ex(jd, FLAGS, lat, lon, b'P')
+            asc = ascmc[0] % 360.0
+            res = {
+                "label": label,
+                "Ascendant": {"degree": round(asc, 2), "sign": SIGNS[int(asc // 30)]},
+                "Planets": []
+            }
+
+            # 7-те планети
+            for pid, name in [
+                (swe.SUN, "Слънце"), (swe.MOON,"Луна"), (swe.MERCURY,"Меркурий"),
+                (swe.VENUS,"Венера"), (swe.MARS,"Марс"), (swe.JUPITER,"Юпитер"), (swe.SATURN,"Сатурн")
+            ]:
+                pos, _ = swe.calc_ut(jd, pid, FLAGS)
+                L = pos[0] % 360.0
+                idx = int(L // (360/27))
+                pada = int(((L % (360/27)) / (360/108))) + 1
+                res["Planets"].append({
+                    "planet": name,
+                    "longitude": round(L, 2),
+                    "sign": SIGNS[int(L // 30)],
+                    "nakshatra": NAKSHATRAS[idx],
+                    "pada": pada
+                })
+
+            # Раху (true/mean)
+            node_id = swe.TRUE_NODE if node_is_true else swe.MEAN_NODE
+            node_pos, _ = swe.calc_ut(jd, node_id, FLAGS)
+            rahu_L = node_pos[0] % 360.0
+            idx = int(rahu_L // (360/27))
+            pada = int(((rahu_L % (360/27)) / (360/108))) + 1
+            res["Planets"].append({
+                "planet": "Раху",
+                "longitude": round(rahu_L, 2),
+                "sign": SIGNS[int(rahu_L // 30)],
+                "nakshatra": NAKSHATRAS[idx],
+                "pada": pada
+            })
+
+            # Кету = Раху + 180°
+            ketu_L = (rahu_L + 180.0) % 360.0
+            idx = int(ketu_L // (360/27))
+            pada = int(((ketu_L % (360/27)) / (360/108))) + 1
+            res["Planets"].append({
+                "planet": "Кету",
+                "longitude": round(ketu_L, 2),
+                "sign": SIGNS[int(ketu_L // 30)],
+                "nakshatra": NAKSHATRAS[idx],
+                "pada": pada
+            })
+            return res
+
+        variants = [
+            compute_variant("LAHIRI_TRUE", swe.SIDM_LAHIRI, True),
+            compute_variant("LAHIRI_MEAN", swe.SIDM_LAHIRI, False),
+            compute_variant("RAMAN_TRUE",  swe.SIDM_RAMAN,  True),
+            compute_variant("KP_TRUE",     swe.SIDM_KP,     True),
+        ]
+
+        return jsonify({"ok": True, "sidereal_variants": variants}), 200
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "trace": traceback.format_exc()}), 200
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
 # ---------- конфигурация през ENV ----------
