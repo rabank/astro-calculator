@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os, math
 import swisseph as swe
+swe.set_sid_mode(swe.SIDM_LAHIRI)
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo  # за работа с IANA timezones, напр. "Europe/Sofia"
 
