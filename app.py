@@ -2,7 +2,7 @@
 import json, traceback
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import os, math
+import os
 import swisseph as swe
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -22,67 +22,7 @@ AYAN_MAP = {
 # по подразбиране – LAHIRI, ако е нещо друго
 swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
 
-# Флагове (геоцентрични, сидерал, true ecliptic-of-date + скорост)
-# --- Флагове (по-сигурни за съвпад с JHora/DevaGuru) ---
-# - FLG_SWIEPH    : Swiss ephemeris
-# - FLG_SPEED     : да връща и скорости (не пречи)
-# - FLG_SIDEREAL  : сидерални дължини (когато е включен)
-# - FLG_TRUEPOS   : true position (апарантна позиция) – близо до това, което ползват повечето програми
-# - FLG_NONUT     : без нутация (изчиства още малки разлики)
-FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED | swe.FLG_TRUEPOS | swe.FLG_NONUT
-FLAGS_SID  = FLAGS_TROP     | swe.FLG_SIDEREAL  # = същото + сидерал
-
-def planet_longitudes(jd, use_sidereal=True):
-    """Връща абсолютна дължина [0..360) за основните планети + Раху/Кету
-       при гарантирано настроен режим (айанамша + sidereal/tropical)."""
-    # 1) гарантираме режима всеки път
-    if use_sidereal:
-        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
-        flags = FLAGS_SID
-    else:
-        # tropical — няма айанамша
-        flags = FLAGS_TROP
-
-    plist = [
-        (swe.SUN,     "Слънце"),
-        (swe.MOON,    "Луна"),
-        (swe.MERCURY, "Меркурий"),
-        (swe.VENUS,   "Венера"),
-        (swe.MARS,    "Марс"),
-        (swe.JUPITER, "Юпитер"),
-        (swe.SATURN,  "Сатурн"),
-    ]
-
-    out = []
-    for pid, name in plist:
-        pos, _ = swe.calc_ut(jd, pid, flags)
-        lon = pos[0] % 360.0
-        n, p = nak_pada(lon)
-        out.append({
-            "planet": name,
-            "longitude": round(lon, 6),
-            "sign": sign_of(lon),
-            "nakshatra": n,
-            "pada": p
-        })
-
-    # 2) Възли — според NODE настройката (TRUE/MEAN)
-    node_id = swe.TRUE_NODE if NODE == "TRUE" else swe.MEAN_NODE
-    npos, _ = swe.calc_ut(jd, node_id, flags)
-    rahu = npos[0] % 360.0
-    ketu = (rahu + 180.0) % 360.0
-
-    # По твое желание: винаги показваме първо КЕТУ (защото „върви назад“),
-    # а после РАХУ – и двата със сидералния знак.
-    k_nak, k_p = nak_pada(ketu)
-    r_nak, r_p = nak_pada(rahu)
-
-    out.append({"planet": "Кету",  "longitude": round(ketu, 6), "sign": sign_of(ketu), "nakshatra": k_nak, "pada": k_p})
-    out.append({"planet": "Раху",  "longitude": round(rahu, 6), "sign": sign_of(rahu), "nakshatra": r_nak, "pada": r_p})
-
-    return out
-
-
+# ------------------ константи/помощни ------------------
 SIGNS = [
     "Овен","Телец","Близнаци","Рак","Лъв","Дева",
     "Везни","Скорпион","Стрелец","Козирог","Водолей","Риби"
@@ -111,8 +51,26 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
     jd       = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)   # UT
     return jd, dt_utc
 
-def planet_longitudes(jd: float, flags: int):
-    """Връща абсолютна дължина [0..360) за основните планети + node (според NODE)."""
+# ---- Флагове: смятаме планетите само тропикално, после вадим айанамша ръчно ----
+FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
+# За къщите/диагностика можем да ползваме сидерален флаг (не за планети!)
+FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
+
+def _ayanamsha_deg_ut(jd: float) -> float:
+    """Взимаме айанамша за текущата конфигурация."""
+    swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+    return swe.get_ayanamsa_ut(jd)
+
+def _sidereal_from_tropical(trop_lon: float, ayan: float) -> float:
+    return (trop_lon - ayan) % 360.0
+
+def planet_longitudes(jd: float, use_sidereal: bool = True):
+    """
+    Винаги смятаме тропикални дължини, после ако use_sidereal=True
+    изваждаме айанамшата РЪЧНО за всички тела. Така няма смесване на режими.
+    """
+    ayan = _ayanamsha_deg_ut(jd) if use_sidereal else 0.0
+
     plist = [
         (swe.SUN,     "Слънце"),
         (swe.MOON,    "Луна"),
@@ -122,11 +80,13 @@ def planet_longitudes(jd: float, flags: int):
         (swe.JUPITER, "Юпитер"),
         (swe.SATURN,  "Сатурн"),
     ]
+
     out = []
     for pid, name in plist:
-        pos, _ = swe.calc_ut(jd, pid, flags)
-        lon = pos[0] % 360.0
-        n,p = nak_pada(lon)
+        pos, _ = swe.calc_ut(jd, pid, FLAGS_TROP)  # винаги тропикално
+        trop = pos[0] % 360.0
+        lon  = _sidereal_from_tropical(trop, ayan) if use_sidereal else trop
+        n, p = nak_pada(lon)
         out.append({
             "planet": name,
             "longitude": round(lon, 6),
@@ -135,29 +95,19 @@ def planet_longitudes(jd: float, flags: int):
             "pada": p
         })
 
-    # node
+    # Възли (true/mean) – също тропикално и после айанамша
     node_id = swe.TRUE_NODE if NODE == "TRUE" else swe.MEAN_NODE
-    npos, _ = swe.calc_ut(jd, node_id, flags)
-    nlon = npos[0] % 360.0
-    n_nak, n_pada = nak_pada(nlon)
-    out.append({
-        "planet": "Раху",
-        "longitude": round(nlon, 6),
-        "sign": sign_of(nlon),
-        "nakshatra": n_nak,
-        "pada": n_pada
-    })
+    npos, _ = swe.calc_ut(jd, node_id, FLAGS_TROP)
+    trop_rahu = npos[0] % 360.0
+    rahu = _sidereal_from_tropical(trop_rahu, ayan) if use_sidereal else trop_rahu
+    ketu = (rahu + 180.0) % 360.0
 
-    # Ketu
-    k = (nlon + 180.0) % 360.0
-    k_nak, k_pada = nak_pada(k)
-    out.append({
-        "planet": "Кету",
-        "longitude": round(k, 6),
-        "sign": sign_of(k),
-        "nakshatra": k_nak,
-        "pada": k_pada
-    })
+    k_n, k_p = nak_pada(ketu)
+    r_n, r_p = nak_pada(rahu)
+
+    # Първо Кету, после Раху
+    out.append({"planet":"Кету", "longitude":round(ketu,6),"sign":sign_of(ketu),"nakshatra":k_n,"pada":k_p})
+    out.append({"planet":"Раху", "longitude":round(rahu,6),"sign":sign_of(rahu),"nakshatra":r_n,"pada":r_p})
 
     return out
 
@@ -193,7 +143,7 @@ def debug():
         def compute_variant(label, ayanamsha_const, node_is_true):
             swe.set_sid_mode(ayanamsha_const)
 
-            # Асцендент
+            # Асцендент (сидерални къщи)
             houses, ascmc = swe.houses_ex(jd, FLAGS_SID, lat, lon, b'P')
             asc = ascmc[0] % 360.0
             res = {
@@ -202,7 +152,7 @@ def debug():
                 "Planets": []
             }
 
-            # 7-те планети
+            # 7-те планети (тук за дебъг ползваме сидералния флаг)
             for pid, name in [
                 (swe.SUN, "Слънце"), (swe.MOON,"Луна"), (swe.MERCURY,"Меркурий"),
                 (swe.VENUS,"Венера"), (swe.MARS,"Марс"), (swe.JUPITER,"Юпитер"), (swe.SATURN,"Сатурн")
@@ -273,18 +223,21 @@ def calculate():
     lat = float(data.get('lat'))
     lon = float(data.get('lon'))
 
-    # Asc (sidereal, Placidus)
-    jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
-    houses, ascmc = swe.houses_ex(jd, FLAGS_SID, lat, lon, b'P')  # sidereal houses
+    # JD
+    jd, _ = dt_to_jd(date_str, time_str, tz_str)
+
+    # Сидерален Ascendant (Placidus)
+    swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+    houses, ascmc = swe.houses_ex(jd, FLAGS_SID, lat, lon, b'P')
     asc = ascmc[0] % 360.0
 
     res = {
-    "config": {
-        "ayanamsha": AYAN,
-        "node_type": NODE,
-    },
-    "Ascendant": {"degree": round(asc, 6), "sign": sign_of(asc)},
-    "Planets": planet_longitudes(jd, use_sidereal=True)   # <- СИДЕРАЛНО, фиксирано
+        "config": {
+            "ayanamsha": AYAN,
+            "node_type": NODE,
+        },
+        "Ascendant": {"degree": round(asc, 6), "sign": sign_of(asc)},
+        "Planets": planet_longitudes(jd, use_sidereal=True)   # <- СИДЕРАЛНО, чрез ръчно изваждане на айанамша
     }
     return jsonify(res)
 
