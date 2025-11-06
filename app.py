@@ -241,7 +241,26 @@ def calculate():
         "Planets": planet_longitudes(jd, use_sidereal=True)   # <- СИДЕРАЛНО, чрез ръчно изваждане на айанамша
     }
     return jsonify(res)
+@app.route('/diag', methods=['GET'])
+def diag():
+    date_str, time_str, tz_str = "1988-05-24", "12:00", "Europe/Sofia"
+    jd, _ = dt_to_jd(date_str, time_str, tz_str)
 
+    # тропикално Слънце
+    trop_sun, _ = swe.calc_ut(jd, swe.SUN, FLAGS_TROP)
+    trop = trop_sun[0] % 360.0
+
+    swe.set_sid_mode(swe.SIDM_LAHIRI)
+    ay = swe.get_ayanamsa_ut(jd)
+    sid = (trop - ay) % 360.0
+
+    return jsonify({
+        "mode_forced": "LAHIRI",
+        "tropical_sun_deg": trop,
+        "ayanamsha_deg": ay,
+        "sidereal_sun_deg": sid,
+        "sidereal_sun_in_sign_deg": sid % 30.0
+    })
 @app.route('/')
 def home():
     return f"Astro Calculator API is running (AYAN={AYAN}, NODE={NODE})"
