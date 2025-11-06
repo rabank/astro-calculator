@@ -12,7 +12,8 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
 # ---------- конфигурация през ENV ----------
 AYAN = os.getenv("AYANAMSHA", "LAHIRI").upper()   # LAHIRI | RAMAN | KP
-NODE = os.getenv("NODE_TYPE", "TRUE").upper()     # TRUE | MEAN
+NODE = os.getenv("NODE_TYPE", "MEAN").upper()     # TRUE | MEAN  (по подразбиране MEAN)
+
 
 AYAN_MAP = {
     "LAHIRI": swe.SIDM_LAHIRI,      # Chitrapaksha
@@ -52,7 +53,7 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
     return jd, dt_utc
 
 # ---- Флагове: смятаме планетите само тропикално, после вадим айанамша ръчно ----
-FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
+FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED | swe.FLG_TRUEPOS | swe.FLG_NONUT
 # За къщите/диагностика можем да ползваме сидерален флаг (не за планети!)
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
