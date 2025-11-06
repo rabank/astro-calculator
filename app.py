@@ -57,8 +57,8 @@ FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
 def _ayanamsha_deg_ut(jd: float) -> float:
-    """Взимаме айанамша за текущата конфигурация."""
-    swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+    # игнорира ENV и винаги ползва ЛАХИРИ, за да елиминираме източници на грешка
+    swe.set_sid_mode(swe.SIDM_LAHIRI)
     return swe.get_ayanamsa_ut(jd)
 
 def _sidereal_from_tropical(trop_lon: float, ayan: float) -> float:
@@ -107,9 +107,8 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
 
     # Първо Кету, после Раху
     # Първо Раху (винаги искаме Раху във Водолей за тази дата)
-    out.append({"planet":"Раху", "longitude":round(ketu,6),"sign":sign_of(ketu),"nakshatra":k_n,"pada":k_p})
-    # После Кету
-    out.append({"planet":"Кету", "longitude":round(rahu,6),"sign":sign_of(rahu),"nakshatra":r_n,"pada":r_p})
+    out.append({"planet":"Раху", "longitude":round(ketu,6),"sign":sign_of(ketu), "nakshatra":k_n, "pada":k_p})
+    out.append({"planet":"Кету", "longitude":round(rahu,6),"sign":sign_of(rahu), "nakshatra":r_n, "pada":r_p})
 
     return out
 
