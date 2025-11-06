@@ -118,6 +118,26 @@ def add_cors(resp):
     resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     resp.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
     return resp
+def houses_safe(jd, lat, lon, flags=None, hsys=b'P'):
+    """
+    Връща (cusps, ascmc) и работи с и без FLAGS параметър,
+    според версията на pyswisseph.
+    """
+    try:
+        if flags is None:
+            # опит 1: старият подпис без flags
+            return swe.houses_ex(jd, lat, lon, hsys)
+        else:
+            # опит 2: новият подпис с flags
+            return swe.houses_ex(jd, flags, lat, lon, hsys)
+    except TypeError:
+        # ако сме уцелили „грешния“ подпис – пробваме другия
+        try:
+            return swe.houses_ex(jd, lat, lon, hsys)
+        except Exception:
+            # краен fallback – класическата функция без „ex“
+            cusps, ascmc = swe.houses(jd, lat, lon, hsys)
+            return (cusps, ascmc)
 
 # 1) Много кратък health чек
 @app.route('/health', methods=['GET'])
@@ -145,8 +165,10 @@ def debug():
             swe.set_sid_mode(ayanamsha_const)
 
             # Асцендент (сидерални къщи)
-            houses, ascmc = swe.houses_ex(jd, FLAGS_SID, lat, lon, b'P')
+            # БЕШЕ: houses, ascmc = swe.houses_ex(jd, FLAGS_SID, lat, lon, b'P')
+            houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_SID, hsys=b'P')
             asc = ascmc[0] % 360.0
+
             res = {
                 "label": label,
                 "Ascendant": {"degree": round(asc, 2), "sign": SIGNS[int(asc // 30)]},
@@ -229,7 +251,8 @@ def calculate():
 
         # Сидерален Ascendant (Placidus)
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
-        houses, ascmc = swe.houses_ex(jd, FLAGS_SID, lat, lon, b'P')
+        # БЕШЕ: houses, ascmc = swe.houses_ex(jd, FLAGS_SID, lat, lon, b'P')
+        houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_SID, hsys=b'P')
         asc = ascmc[0] % 360.0
 
         res = {
