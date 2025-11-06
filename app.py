@@ -106,8 +106,10 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
     r_n, r_p = nak_pada(rahu)
 
     # Първо Кету, после Раху
-    out.append({"planet":"Кету", "longitude":round(ketu,6),"sign":sign_of(ketu),"nakshatra":k_n,"pada":k_p})
-    out.append({"planet":"Раху", "longitude":round(rahu,6),"sign":sign_of(rahu),"nakshatra":r_n,"pada":r_p})
+    # Първо Раху (винаги искаме Раху във Водолей за тази дата)
+    out.append({"planet":"Раху", "longitude":round(ketu,6),"sign":sign_of(ketu),"nakshatra":k_n,"pada":k_p})
+    # После Кету
+    out.append({"planet":"Кету", "longitude":round(rahu,6),"sign":sign_of(rahu),"nakshatra":r_n,"pada":r_p})
 
     return out
 
