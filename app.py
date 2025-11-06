@@ -212,40 +212,38 @@ def debug():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "trace": traceback.format_exc()}), 200
 
-@app.route('/calculate', methods=['POST', 'OPTIONS'])
+@app.route('/calculate', methods=['POST','OPTIONS'])
 def calculate():
     if request.method == 'OPTIONS':
         return ('', 204)
     try:
-        data = request.get_json(force=True, silent=True)
-        if not isinstance(data, dict):
-            raw = request.data.decode('utf-8', 'ignore')
-            return jsonify({"ok": False, "error": "Invalid JSON", "raw": raw}), 400
+        data = request.get_json(force=True)
+        date_str = data.get('date')
+        time_str = data.get('time')
+        tz_str   = data.get('timezone')
+        lat = float(data.get('lat'))
+        lon = float(data.get('lon'))
 
-        date_str = (data.get('date') or '').strip()
-        time_str = (data.get('time') or '').strip()
-        tz_str   = (data.get('timezone') or '').strip() or 'Europe/Sofia'
-        try:
-            lat = float(data.get('lat'))
-            lon = float(data.get('lon'))
-        except Exception:
-            return jsonify({"ok": False, "error": "Invalid lat/lon", "received": data}), 400
-
+        # JD
         jd, _ = dt_to_jd(date_str, time_str, tz_str)
 
-        # Сидерален Asc (Placidus)
+        # Сидерален Ascendant (Placidus)
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
         houses, ascmc = swe.houses_ex(jd, FLAGS_SID, lat, lon, b'P')
         asc = ascmc[0] % 360.0
 
         res = {
-            "config": {"ayanamsha": AYAN, "node_type": NODE},
+            "config": {
+                "ayanamsha": AYAN,
+                "node_type": NODE,
+            },
             "Ascendant": {"degree": round(asc, 6), "sign": sign_of(asc)},
             "Planets": planet_longitudes(jd, use_sidereal=True)
         }
         return jsonify(res), 200
 
     except Exception as e:
+        # върни чист JSON вместо HTML 500
         return jsonify({
             "ok": False,
             "error": str(e),
