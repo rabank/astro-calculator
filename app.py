@@ -53,7 +53,7 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
     return jd, dt_utc
 
 # ---- Флагове: смятаме планетите само тропикално, после вадим айанамша ръчно ----
-FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED | swe.FLG_TRUEPOS | swe.FLG_NONUT
+FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED | swe.FLG_TRUEPOS | swe.FLG_NONUT | swe.FLG_NOABERR
 # За къщите/диагностика можем да ползваме сидерален флаг (не за планети!)
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
@@ -107,9 +107,9 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
     r_n, r_p = nak_pada(rahu)
 
     # Първо Кету, после Раху
-    # Първо Раху (винаги искаме Раху във Водолей за тази дата)
-    out.append({"planet":"Раху", "longitude":round(ketu,6),"sign":sign_of(ketu), "nakshatra":k_n, "pada":k_p})
-    out.append({"planet":"Кету", "longitude":round(rahu,6),"sign":sign_of(rahu), "nakshatra":r_n, "pada":r_p})
+    # Правилни етикети
+    out.append({"planet":"Раху", "longitude":round(rahu,6),"sign":sign_of(rahu), "nakshatra":r_n, "pada":r_p})
+    out.append({"planet":"Кету", "longitude":round(ketu,6),"sign":sign_of(ketu), "nakshatra":k_n, "pada":k_p})
 
     return out
 
