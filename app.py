@@ -7,6 +7,11 @@ import swisseph as swe
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+# ---- Swiss Ephemeris: път до ефемеридите ----
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+EPHE_PATH = os.path.join(BASE_DIR, "ephe")  # папка "ephe" до app.py
+swe.set_ephe_path(EPHE_PATH)
+
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
