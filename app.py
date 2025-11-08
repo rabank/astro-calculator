@@ -11,6 +11,8 @@ from zoneinfo import ZoneInfo
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EPHE_PATH = os.path.join(BASE_DIR, "ephe")  # папка "ephe" до app.py
 swe.set_ephe_path(EPHE_PATH)
+# Форсирай стар модел на ΔT, подобен на Jataka/DevaGuru
+swe.set_delta_t_userdef(0.0)
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
