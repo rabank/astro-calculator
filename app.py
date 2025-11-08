@@ -62,7 +62,7 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
 
 # ---- Флагове ----
 # Планети: винаги тропикално, после вадим айанамша ръчно
-FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED | swe.FLG_TRUEPOS
+FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
 # Къщи: сидерални (Lahiri) за Asc
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
