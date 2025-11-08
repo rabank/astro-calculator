@@ -26,7 +26,7 @@ AYAN_MAP = {
     "RAMAN":  swe.SIDM_RAMAN,
     "KP":     swe.SIDM_KRISHNAMURTI
 }
-
+NK_AYAN_OFFSET = float(os.getenv("NK_AYAN_OFFSET", "-0.005025"))  # градуса (~18.09")
 # по подразбиране – LAHIRI, ако е нещо друго
 swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
 
@@ -68,9 +68,9 @@ FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED | swe.FLG_TRUEPOS
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
 def _ayanamsha_deg_ut(jd: float) -> float:
-    # фиксираме LAHIRI за консистентност с JHora/Deva
+    # форсираме LAHIRI и добавяме малкия offset
     swe.set_sid_mode(swe.SIDM_LAHIRI)
-    return swe.get_ayanamsa_ut(jd)
+    return swe.get_ayanamsa_ut(jd) + NK_AYAN_OFFSET
 
 def _sidereal_from_tropical(trop_lon: float, ayan: float) -> float:
     return (trop_lon - ayan) % 360.0
