@@ -265,13 +265,21 @@ def calculate():
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
 
+        # 1️⃣ Изчисляваме Julian Date
         jd, _ = dt_to_jd(date_str, time_str, tz_str)
 
-        # Asc (сидерален, Placidus, Lahiri)
+        # 2️⃣ Слагаме сидерален режим (Lahiri)
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
-        houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_SID, hsys=b'P')
+
+        # 3️⃣ Изчисляваме Asc (с Placidus → X / Sripati)
+        houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_SID, hsys=b'X')
         asc = ascmc[0] % 360.0
 
+        # 4️⃣ Форсираме ръчно айанамшата (за точност като DevaGuru)
+        ayan = _ayanamsha_deg_ut(jd)
+        asc = (asc - ayan) % 360.0
+
+        # 5️⃣ Генерираме резултат
         res = {
             "config": {
                 "ayanamsha": AYAN,
@@ -292,6 +300,7 @@ def calculate():
             "error": str(e),
             "trace": traceback.format_exc()
         }), 500
+
 
 # ---------- ROOT ----------
 @app.route('/')
