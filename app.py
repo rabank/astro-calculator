@@ -1,4 +1,3 @@
-# app.py
 import json, traceback
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -7,30 +6,27 @@ import swisseph as swe
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-# ---- Swiss Ephemeris: път до ефемеридите ----
+# ---- Swiss Ephemeris: path to ephemeris files ----
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-EPHE_PATH = os.path.join(BASE_DIR, "ephe")  # папка "ephe" до app.py
+EPHE_PATH = os.path.join(BASE_DIR, "ephe")
 swe.set_ephe_path(EPHE_PATH)
-# Форсирай стар модел на ΔT, подобен на Jataka/DevaGuru
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
-# ---------- конфигурация през ENV ----------
-# Можеш да ги оставиш така; ако не са сетнати, ползваме LAHIRI + MEAN node
+# ---------- configuration via ENV ----------
 AYAN = os.getenv("AYANAMSHA", "LAHIRI").upper()   # LAHIRI | RAMAN | KP
 NODE = os.getenv("NODE_TYPE", "MEAN").upper()     # TRUE | MEAN
 
 AYAN_MAP = {
-    "LAHIRI": swe.SIDM_LAHIRI,          # Chitrapaksha
+    "LAHIRI": swe.SIDM_LAHIRI,
     "RAMAN":  swe.SIDM_RAMAN,
-    "KP":     swe.SIDM_KRISHNAMURTI
+    "KP":     swe.SIDM_KRISHNAMURTI,
 }
-NK_AYAN_OFFSET = float(os.getenv("NK_AYAN_OFFSET", "-0.005025"))  # градуса (~18.09")
-# по подразбиране – LAHIRI, ако е нещо друго
+# default Lahiri if unknown
 swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
 
-# ------------------ константи ------------------
+# ------------------ constants ------------------
 SIGNS = [
     "Овен","Телец","Близнаци","Рак","Лъв","Дева",
     "Везни","Скорпион","Стрелец","Козирог","Водолей","Риби"
@@ -44,7 +40,7 @@ NAK = [
 ]
 
 def sign_of(lon: float) -> str:
-    return SIGNS[int((lon % 360)//30)]
+    return SIGNS[int((lon % 360.0) // 30.0)]
 
 def nak_pada(lon: float):
     span = 360.0 / 27.0
@@ -61,25 +57,28 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
     jd       = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)   # UT
     return jd, dt_utc
 
-# ---- Флагове ----
-# Планети: винаги тропикално, после вадим айанамша ръчно
-FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED | swe.FLG_TRUEPOS
-# Къщи: сидерални (Lahiri) за Asc
-FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
+# ---- flags ----
+# Planets: always tropical, then manual ayanamsha
+FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
+# we do NOT use SIDEREAL flags here
 
 def _ayanamsha_deg_ut(jd: float) -> float:
-    # форсираме LAHIRI и добавяме малкия offset
+    """
+    Always compute ayanamsha from Swiss Ephemeris for Lahiri,
+    regardless of global AYAN setting (to stay stable vs JHora/Deva).
+    """
     swe.set_sid_mode(swe.SIDM_LAHIRI)
-    return swe.get_ayanamsa_ut(jd) + NK_AYAN_OFFSET
+    return swe.get_ayanamsa_ut(jd)
 
 def _sidereal_from_tropical(trop_lon: float, ayan: float) -> float:
     return (trop_lon - ayan) % 360.0
 
 def planet_longitudes(jd: float, use_sidereal: bool = True):
     """
-    Винаги смятаме тропикални дължини (FLAGS_TROP).
-    Ако use_sidereal=True → изваждаме LAHIRI айанамша ръчно за всички тела.
-    Това избягва смесване на режими и ни доближава до секундите.
+    Compute planetary longitudes.
+    - First: tropical positions with FLAGS_TROP.
+    - If use_sidereal=True: subtract Lahiri ayanamsha manually.
+    This avoids mixed modes and keeps consistency with JHora/Deva.
     """
     ayan = _ayanamsha_deg_ut(jd) if use_sidereal else 0.0
 
@@ -107,7 +106,7 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
             "pada": p
         })
 
-    # Възли (по NODE_TYPE): тропикално + айанамша
+    # Nodes (true or mean) from env:
     node_id = swe.TRUE_NODE if NODE == "TRUE" else swe.MEAN_NODE
     npos, _ = swe.calc_ut(jd, node_id, FLAGS_TROP)
     trop_rahu = npos[0] % 360.0
@@ -117,7 +116,6 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
     r_n, r_p = nak_pada(rahu)
     k_n, k_p = nak_pada(ketu)
 
-    # РАХУ и КЕТУ с правилни етикети и 180° разлика
     out.append({
         "planet": "Раху",
         "longitude": round(rahu, 6),
@@ -135,22 +133,20 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
 
     return out
 
-def houses_safe(jd, lat, lon, flags=None, hsys=b'x'):
+def houses_safe(jd, lat, lon, hsys=b'P'):
     """
-    Унифициран достъп до houses_ex / houses за различни версии на pyswisseph.
-    Избягваме TypeError заради различни подписи.
+    Compatibility wrapper for houses_ex / houses across pyswisseph versions.
+    Always computes tropical houses; sidereal handled manually.
     """
     try:
-        if flags is not None:
-            # новият подпис
-            return swe.houses_ex(jd, flags, lat, lon, hsys)
-        else:
-            # старият подпис
-            return swe.houses_ex(jd, lat, lon, hsys)
+        # common signature: houses_ex(jd, lat, lon, hsys)
+        return swe.houses_ex(jd, lat, lon, hsys)
     except TypeError:
         try:
-            return swe.houses_ex(jd, lat, lon, hsys)
+            # alternative: houses_ex(jd, flags, lat, lon, hsys)
+            return swe.houses_ex(jd, swe.FLG_SWIEPH, lat, lon, hsys)
         except Exception:
+            # fallback: classic houses()
             cusps, ascmc = swe.houses(jd, lat, lon, hsys)
             return (cusps, ascmc)
 
@@ -176,60 +172,63 @@ def debug():
         lat      = 43.2141
         lon      = 27.9147
 
-        dt_local = datetime.strptime(
-            f"{date_str} {time_str}", "%Y-%m-%d %H:%M"
-        ).replace(tzinfo=ZoneInfo(tz_str))
-        dt_utc   = dt_local.astimezone(timezone.utc)
-        ut_hour  = dt_utc.hour + dt_utc.minute/60.0 + dt_utc.second/3600.0
-        jd       = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)
+        jd, _ = dt_to_jd(date_str, time_str, tz_str)
 
         def compute_variant(label, ayanamsha_const, node_is_true):
+            # force specific ayanamsha for this variant
             swe.set_sid_mode(ayanamsha_const)
-            houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_SID, hsys=b'x')
-            asc = ascmc[0] % 360.0
+            ay = swe.get_ayanamsa_ut(jd)
+
+            # Asc: tropical houses → minus this ayanamsha
+            houses, ascmc = houses_safe(jd, lat, lon, hsys=b'P')
+            asc_trop = ascmc[0] % 360.0
+            asc_sid  = (asc_trop - ay) % 360.0
 
             res = {
                 "label": label,
                 "Ascendant": {
-                    "degree": round(asc, 4),
-                    "sign": sign_of(asc)
+                    "degree": round(asc_sid, 6),
+                    "sign": sign_of(asc_sid)
                 },
                 "Planets": []
             }
 
+            # 7 planets sidereal for this ayanamsha
             for pid, name in [
                 (swe.SUN, "Слънце"), (swe.MOON,"Луна"), (swe.MERCURY,"Меркурий"),
                 (swe.VENUS,"Венера"), (swe.MARS,"Марс"),
                 (swe.JUPITER,"Юпитер"), (swe.SATURN,"Сатурн")
             ]:
-                pos, _ = swe.calc_ut(jd, pid, FLAGS_SID)
-                L = pos[0] % 360.0
+                pos, _ = swe.calc_ut(jd, pid, FLAGS_TROP)
+                trop = pos[0] % 360.0
+                L = (trop - ay) % 360.0
                 n, p = nak_pada(L)
                 res["Planets"].append({
                     "planet": name,
-                    "longitude": round(L, 4),
+                    "longitude": round(L, 6),
                     "sign": sign_of(L),
                     "nakshatra": n,
                     "pada": p
                 })
 
+            # Nodes for this variant
             node_id = swe.TRUE_NODE if node_is_true else swe.MEAN_NODE
-            node_pos, _ = swe.calc_ut(jd, node_id, FLAGS_SID)
-            rahu_L = node_pos[0] % 360.0
+            node_pos, _ = swe.calc_ut(jd, node_id, FLAGS_TROP)
+            rahu_L = (node_pos[0] - ay) % 360.0
             ketu_L = (rahu_L + 180.0) % 360.0
             r_n, r_p = nak_pada(rahu_L)
             k_n, k_p = nak_pada(ketu_L)
 
             res["Planets"].append({
                 "planet": "Раху",
-                "longitude": round(rahu_L, 4),
+                "longitude": round(rahu_L, 6),
                 "sign": sign_of(rahu_L),
                 "nakshatra": r_n,
                 "pada": r_p
             })
             res["Planets"].append({
                 "planet": "Кету",
-                "longitude": round(ketu_L, 4),
+                "longitude": round(ketu_L, 6),
                 "sign": sign_of(ketu_L),
                 "nakshatra": k_n,
                 "pada": k_p
@@ -244,6 +243,7 @@ def debug():
             compute_variant("KP_TRUE",     swe.SIDM_KRISHNAMURTI, True),
         ]
 
+        # restore global
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
 
         return jsonify({"ok": True, "sidereal_variants": variants}), 200
@@ -264,21 +264,18 @@ def calculate():
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
 
-        # 1️⃣ Изчисляваме Julian Date
+        # Julian Date
         jd, _ = dt_to_jd(date_str, time_str, tz_str)
 
-        # 2️⃣ Слагаме сидерален режим (Lahiri)
-        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+        # Ascendant:
+        # 1) tropical houses, Placidus
+        houses, ascmc = houses_safe(jd, lat, lon, hsys=b'P')
+        asc_trop = ascmc[0] % 360.0
 
-        # 3️⃣ Изчисляваме Asc (с Placidus → X / Sripati)
-        houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_SID, hsys=b'X')
-        asc = ascmc[0] % 360.0
-
-        # 4️⃣ Форсираме ръчно айанамшата (за точност като DevaGuru)
+        # 2) sidereal via Lahiri ayanamsha
         ayan = _ayanamsha_deg_ut(jd)
-        asc = (asc - ayan) % 360.0
+        asc_sid = (asc_trop - ayan) % 360.0
 
-        # 5️⃣ Генерираме резултат
         res = {
             "config": {
                 "ayanamsha": AYAN,
@@ -286,8 +283,8 @@ def calculate():
                 "ephe_path": EPHE_PATH,
             },
             "Ascendant": {
-                "degree": round(asc, 6),
-                "sign": sign_of(asc)
+                "degree": round(asc_sid, 6),
+                "sign": sign_of(asc_sid)
             },
             "Planets": planet_longitudes(jd, use_sidereal=True)
         }
@@ -300,11 +297,10 @@ def calculate():
             "trace": traceback.format_exc()
         }), 500
 
-
 # ---------- ROOT ----------
 @app.route('/')
 def home():
-    return f"Astro Calculator API is running (AYAN={AYAN}, NODE={NODE})"
+    return f"Astro Calculator API is running (AYAN={AYAN}, NODE={NODE}, EPHE={EPHE_PATH})"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
