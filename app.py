@@ -136,7 +136,7 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
 
     return out
 
-def houses_safe(jd, lat, lon, flags=None, hsys=b'P'):
+def houses_safe(jd, lat, lon, flags=None, hsys=b'x'):
     """
     Унифициран достъп до houses_ex / houses за различни версии на pyswisseph.
     Избягваме TypeError заради различни подписи.
@@ -186,7 +186,7 @@ def debug():
 
         def compute_variant(label, ayanamsha_const, node_is_true):
             swe.set_sid_mode(ayanamsha_const)
-            houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_SID, hsys=b'P')
+            houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_SID, hsys=b'x')
             asc = ascmc[0] % 360.0
 
             res = {
