@@ -47,6 +47,73 @@ NAK = [
     "Пурва-Бхадра","Утара-Бхадра","Ревати"
 ]
 
+# ---------- PANCHANGA CONSTANTS ----------
+
+# 30 тити – базови имена (можем по-късно да ги направим по-„поетични“)
+TITHI_NAMES = [
+    "1 растящ", "2 растящ", "3 растящ", "4 растящ", "5 растящ",
+    "6 растящ", "7 растящ", "8 растящ", "9 растящ", "10 растящ",
+    "11 растящ", "12 растящ", "13 растящ", "14 растящ", "15 Пурнима",
+    "1 намаляващ", "2 намаляващ", "3 намаляващ", "4 намаляващ", "5 намаляващ",
+    "6 намаляващ", "7 намаляващ", "8 намаляващ", "9 намаляващ", "10 намаляващ",
+    "11 намаляващ", "12 намаляващ", "13 намаляващ", "14 намаляващ", "15 Амавасйа"
+]
+
+# Господари на тити – цикъл 8 планети
+TITHI_LORD_SEQ = [
+    "Слънце","Луна","Марс","Меркурий","Юпитер","Венера","Сатурн","Раху"
+]
+
+# Вара (седмичен ден)
+VARA_NAMES = [
+    "Понеделник","Вторник","Сряда","Четвъртък",
+    "Петък","Събота","Неделя"
+]
+VARA_LORDS = [
+    "Луна",      # Понеделник
+    "Марс",      # Вторник
+    "Меркурий",  # Сряда
+    "Юпитер",    # Четвъртък
+    "Венера",    # Петък
+    "Сатурн",    # Събота
+    "Слънце"     # Неделя
+]
+
+# Господари на накшатри: 9-планетен цикъл
+NAK_LORD_SEQ = [
+    "Кету","Венера","Слънце","Луна","Марс","Раху","Юпитер","Сатурн","Меркурий"
+]
+
+# 27 йоги (имената са транслит, важен е индексът и лордът)
+YOGA_NAMES = [
+    "Вишкумбха","Прити","Аюшман","Саубхагя","Шобхана","Атиганда",
+    "Сукарма","Дхрити","Шула","Ганда","Вриддхи","Дхрува",
+    "Вьягхата","Харшана","Ваджра","Сиддхи","Вьятипата","Варияна",
+    "Паригха","Шива","Сиддха","Садхя","Шубха","Шукла",
+    "Брахма","Индра","Вайдхрити"
+]
+
+# За прост старт ползваме същия цикъл като NAK_LORD_SEQ
+YOGA_LORD_SEQ = NAK_LORD_SEQ
+
+# Карани – подвижни + фиксирани
+KARANA_MOVABLE = ["Бава","Балава","Каулaва","Тайтилa","Гара","Ваниджа","Вишти"]
+KARANA_FIXED = ["Шакуни","Чатушпада","Нага","Кимстугна"]
+
+KARANA_LORDS = {
+    "Бава": "Луна",
+    "Балава": "Луна",
+    "Каулaва": "Марс",
+    "Тайтилa": "Меркурий",
+    "Гара": "Юпитер",
+    "Ваниджа": "Венера",
+    "Вишти": "Сатурн",
+    "Шакуни": "Сатурн",
+    "Чатушпада": "Марс",
+    "Нага": "Раху",
+    "Кимстугна": "Слънце",
+}
+
 def sign_of(lon: float) -> str:
     return SIGNS[int((lon % 360)//30)]
 
@@ -55,6 +122,34 @@ def nak_pada(lon: float):
     idx = int((lon % 360.0) // span)
     pada = int(((lon % span) / (span / 4.0))) + 1
     return NAK[idx], pada
+
+def current_karana_name(sun_lon: float, moon_lon: float) -> str:
+    """
+    Класическо 60-каранно деление:
+    - 1..57: подвижните вървят циклично
+    - 57: Шакуни, 58: Чатушпада, 59: Нага, 60: Кимстугна
+    Връщаме името на текущата карана.
+    """
+    diff = (moon_lon - sun_lon) % 360.0
+    k_num = int(diff / 6.0) + 1  # 1..60
+
+    if k_num < 1:
+        k_num = 1
+    if k_num > 60:
+        k_num = 60
+
+    if k_num >= 57:
+        mapping = {
+            57: "Шакуни",
+            58: "Чатушпада",
+            59: "Нага",
+            60: "Кимстугна"
+        }
+        return mapping.get(k_num, "Кимстугна")
+
+    # 1..56 – подвижните циклично
+    idx = (k_num - 1) % 7
+    return KARANA_MOVABLE[idx]
 
 def dt_to_jd(date_str: str, time_str: str, tz_str: str):
     dt_local = datetime.strptime(
@@ -74,7 +169,7 @@ FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 def _ayanamsha_deg_ut(jd: float) -> float:
     """
     Връща (Lahiri айанамша + NK_AYAN_OFFSET).
-    Offset-ът е нашата фина калибровка към Deva/Jataka, ако решиш да го ползваш.
+    Offset-ът е нашата фина калибровка към Deva/Jataka.
     """
     swe.set_sid_mode(swe.SIDM_LAHIRI)
     base = swe.get_ayanamsa_ut(jd)
@@ -148,6 +243,72 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
     })
 
     return out
+
+def compute_panchanga(jd: float, dt_local, sun_lon: float, moon_lon: float):
+    """
+    Минимална Панчанга за момента:
+    Титхи, Вара, Накшатра, Йога, Карана – име + управител.
+    """
+    # ---- TITHI ----
+    diff = (moon_lon - sun_lon) % 360.0
+    tithi_index = int(diff / 12.0)  # 0..29
+    if tithi_index < 0:
+        tithi_index = 0
+    if tithi_index > 29:
+        tithi_index = 29
+    tithi_name = TITHI_NAMES[tithi_index]
+    tithi_lord = TITHI_LORD_SEQ[tithi_index % len(TITHI_LORD_SEQ)]
+
+    # ---- VARA ----
+    wd = dt_local.weekday()  # 0=Mon..6=Sun
+    vara_name = VARA_NAMES[wd]
+    vara_lord = VARA_LORDS[wd]
+
+    # ---- NAKSHATRA ----
+    nak_name, _ = nak_pada(moon_lon)
+    try:
+        nak_idx = NAK.index(nak_name)
+    except ValueError:
+        nak_idx = 0
+    nak_lord = NAK_LORD_SEQ[nak_idx % len(NAK_LORD_SEQ)]
+
+    # ---- YOGA ----
+    span = 360.0 / 27.0
+    yoga_val = (sun_lon + moon_lon) % 360.0
+    yoga_index = int(yoga_val / span)
+    if yoga_index < 0:
+        yoga_index = 0
+    if yoga_index > 26:
+        yoga_index = 26
+    yoga_name = YOGA_NAMES[yoga_index]
+    yoga_lord = YOGA_LORD_SEQ[yoga_index % len(YOGA_LORD_SEQ)]
+
+    # ---- KARANA ----
+    karana_name = current_karana_name(sun_lon, moon_lon)
+    karana_lord = KARANA_LORDS.get(karana_name, "")
+
+    return {
+        "tithi": {
+            "name": tithi_name,
+            "lord": tithi_lord,
+        },
+        "vara": {
+            "name": vara_name,
+            "lord": vara_lord,
+        },
+        "nakshatra": {
+            "name": nak_name,
+            "lord": nak_lord,
+        },
+        "yoga": {
+            "name": yoga_name,
+            "lord": yoga_lord,
+        },
+        "karana": {
+            "name": karana_name,
+            "lord": karana_lord,
+        }
+    }
 
 def houses_safe(jd, lat, lon, flags=None, hsys=b'P'):
     """
@@ -283,7 +444,8 @@ def calculate():
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
 
-        jd, _ = dt_to_jd(date_str, time_str, tz_str)
+        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
+        dt_local = dt_utc.astimezone(ZoneInfo(tz_str))
 
         # глобален сидерален режим (само за инфо/съвместимост)
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
@@ -293,6 +455,16 @@ def calculate():
         houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=b'P')
         asc_trop = ascmc[0] % 360.0
         asc = _sidereal_from_tropical(asc_trop, ayan)
+
+        planets = planet_longitudes(jd, use_sidereal=True)
+
+        # взимаме сидералните лонгитюди на Слънце и Луна от вече сметнатите
+        sun_lon = next((p["longitude"] for p in planets if p["planet"] == "Слънце"), None)
+        moon_lon = next((p["longitude"] for p in planets if p["planet"] == "Луна"), None)
+
+        panchanga = None
+        if sun_lon is not None and moon_lon is not None:
+            panchanga = compute_panchanga(jd, dt_local, sun_lon, moon_lon)
 
         res = {
             "config": {
@@ -305,8 +477,12 @@ def calculate():
                 "degree": round(asc, 6),
                 "sign": sign_of(asc)
             },
-            "Planets": planet_longitudes(jd, use_sidereal=True)
+            "Planets": planets
         }
+
+        if panchanga:
+            res["Panchanga"] = panchanga
+
         return jsonify(res), 200
 
     except Exception as e:
