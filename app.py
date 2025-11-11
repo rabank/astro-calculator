@@ -226,6 +226,26 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
     })
 
     return out
+    
+def compute_arudha_lagna(asc_sign_index, planets):
+    # владетели на знаците (в реда на SIGNS)
+    rulers = ["Марс","Венера","Меркурий","Луна","Слънце","Меркурий",
+              "Венера","Марс","Юпитер","Сатурн","Сатурн","Юпитер"]
+
+    asc_lord = rulers[asc_sign_index]
+    lord = next((p for p in planets if p["planet"] == asc_lord), None)
+    if not lord:
+        return None
+
+    lord_sign_index = SIGNS.index(lord["sign"])
+    diff = (lord_sign_index - asc_sign_index) % 12
+    al_index = (lord_sign_index + diff) % 12
+
+    # ако AL съвпада с лагна или със знака на лорда → добавяме +10
+    if al_index == asc_sign_index or al_index == lord_sign_index:
+        al_index = (al_index + 10) % 12
+
+    return SIGNS[al_index]
 
 def compute_chara_karakas(planets):
     """
@@ -489,6 +509,12 @@ def calculate():
         panchanga = None
         if sun_lon is not None and moon_lon is not None:
             panchanga = compute_panchanga(jd, dt_local, sun_lon, moon_lon)
+        
+        # Арудха Лагна
+        asc_index = SIGNS.index(sign_of(asc))
+        al_sign = compute_arudha_lagna(asc_index, planets)
+        if al_sign:
+            res["ArudhaLagna"] = al_sign
 
         # 8 Chara Karaka с Раху (без Кету)
         ck_map = compute_chara_karakas(planets)
