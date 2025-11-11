@@ -243,6 +243,72 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
     })
 
     return out
+    
+def compute_chara_karakas(planets):
+    """
+    8 Chara Karaka система в духа на традицията на Шри Ачютананда:
+    - Кандидати: 7-те грахи + Раху (Кету не участва).
+    - Работим със сидералните дължини, които вече са подадени в `planets`.
+    - За Раху относителната дължина е мерена от края на знака
+      (Jaimini правило): rel = 30° - (lon % 30°).
+    - Сортираме по относителна дължина (rel) низходящо и раздаваме:
+
+        АК   – Атмакаракa
+        АмК  – Аматякаракa
+        БК   – Бхратрукаракa
+        МК   – Матрукаракa
+        ПиК  – Питрукаракa
+        ПК   – Путракаракa
+        ГК   – Гнатикаракa
+        ДК   – Даракаракa
+
+    Заб.: tie-case (две планети с точно еднакъв rel до секунда)
+    тук не обработваме детайлно; в реални данни е почти нулев шанс.
+    """
+    if not planets:
+        return {}
+
+    # събираме кандидатите (без Кету)
+    cand = []
+    for p in planets:
+        name = p.get("planet")
+        if name == "Кету":
+            continue
+        try:
+            lon = float(p.get("longitude", 0.0)) % 360.0
+        except Exception:
+            lon = 0.0
+
+        # относителна дължина в знака
+        rel = lon % 30.0
+        # за Раху – от края на знака
+        if name == "Раху":
+            rel = 30.0 - rel
+
+        cand.append((name, rel))
+
+    if not cand:
+        return {}
+
+    # сортираме по rel низходящо
+    cand.sort(key=lambda x: x[1], reverse=True)
+
+    labels = [
+        ("АК",  "Атмакаракa"),
+        ("АмК", "Аматякаракa"),
+        ("БК",  "Бхратрукаракa"),
+        ("МК",  "Матрукаракa"),
+        ("ПиК", "Питрукаракa"),
+        ("ПК",  "Путракаракa"),
+        ("ГК",  "Гнатикаракa"),
+        ("ДК",  "Даракаракa"),
+    ]
+
+    karakas = {}
+    for (name, _rel), (code, _full) in zip(cand, labels):
+        karakas[name] = code
+
+    return karakas
 
 def compute_panchanga(jd: float, dt_local, sun_lon: float, moon_lon: float):
     """
@@ -465,6 +531,15 @@ def calculate():
         panchanga = None
         if sun_lon is not None and moon_lon is not None:
             panchanga = compute_panchanga(jd, dt_local, sun_lon, moon_lon)
+
+                planets = planet_longitudes(jd, use_sidereal=True)
+
+        # 8 Chara Karaka с участие на Раху (без Кету)
+        ck_map = compute_chara_karakas(planets)
+        for p in planets:
+            name = p.get("planet")
+            if name in ck_map:
+                p["chara_karaka"] = ck_map[name]
 
         res = {
             "config": {
