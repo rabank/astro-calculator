@@ -228,7 +228,10 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
     return out
     
 def compute_arudha_lagna(asc_sign_index, planets):
-    # владетели на знаците (в реда на SIGNS)
+    """
+    Арудха Лагна (според традицията на Шри Ачютананда / Академия Джатака)
+    """
+    # Владетели на знаците
     rulers = ["Марс","Венера","Меркурий","Луна","Слънце","Меркурий",
               "Венера","Марс","Юпитер","Сатурн","Сатурн","Юпитер"]
 
@@ -238,12 +241,21 @@ def compute_arudha_lagna(asc_sign_index, planets):
         return None
 
     lord_sign_index = SIGNS.index(lord["sign"])
-    diff = (lord_sign_index - asc_sign_index) % 12
-    al_index = (lord_sign_index + diff) % 12
 
-    # ако AL съвпада с лагна или със знака на лорда → добавяме +10
-    if al_index == asc_sign_index or al_index == lord_sign_index:
-        al_index = (al_index + 10) % 12
+    # Разстояние от Лагна до знака на лорда (1-based, но ние работим с 0-based)
+    diff = (lord_sign_index - asc_sign_index) % 12
+
+    # ---- Специални правила на Академия Джатака ----
+    if diff in (3, 9):  # 4-ти или 10-ти от лагна
+        al_index = (asc_sign_index + 3) % 12
+    elif diff in (0, 6):  # 1-ви или 7-ми от лагна
+        al_index = (asc_sign_index + 9) % 12  # 10-ти дом
+    else:
+        al_index = (lord_sign_index + diff) % 12
+        # ако AL попада в 1-ви или 7-ми от лагна, премести с +10
+        rel = (al_index - asc_sign_index) % 12
+        if rel in (0, 6):
+            al_index = (al_index + 10) % 12
 
     return SIGNS[al_index]
 
