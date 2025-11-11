@@ -68,7 +68,7 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
 # ---- Флагове ----
 # Планети: винаги тропикално, после вадим (Lahiri + offset) ръчно
 FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
-# Къщи: сидерални, базират се на глобалния sid_mode (Lahiri)
+# Къщи: по-долу вече ще взимаме тропически Asc и ще го обръщаме сами
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
 def _ayanamsha_deg_ut(jd: float) -> float:
@@ -144,7 +144,6 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
 def houses_safe(jd, lat, lon, flags=None, hsys=b'P'):
     """
     Унифициран достъп до houses_ex / houses за различни версии на pyswisseph.
-    Ползваме Placidus (P). Asc после го коригираме с NK_AYAN_OFFSET.
     """
     try:
         if flags is not None:
@@ -188,11 +187,12 @@ def debug():
         jd       = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)
 
         def compute_variant(label, ayanamsha_const, node_is_true):
+            # тропически Asc → сидерален със същата формула както за планетите
             swe.set_sid_mode(ayanamsha_const)
-            houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_SID, hsys=b'P')
-            asc_lahiri = ascmc[0] % 360.0
-            # прилагаме същия offset и за дебъг Asc
-            asc = (asc_lahiri - NK_AYAN_OFFSET) % 360.0
+            houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=b'P')
+            asc_trop = ascmc[0] % 360.0
+            ay = _ayanamsha_deg_ut(jd)
+            asc = _sidereal_from_tropical(asc_trop, ay)
 
             res = {
                 "label": label,
@@ -210,8 +210,8 @@ def debug():
             ]:
                 pos, _ = swe.calc_ut(jd, pid, FLAGS_TROP)
                 trop = pos[0] % 360.0
-                ay = swe.get_ayanamsa_ut(jd) + NK_AYAN_OFFSET
-                L = (trop - ay) % 360.0
+                ay = _ayanamsha_deg_ut(jd)
+                L = _sidereal_from_tropical(trop, ay)
                 n, p = nak_pada(L)
                 res["Planets"].append({
                     "planet": name,
@@ -224,8 +224,8 @@ def debug():
             node_id = swe.TRUE_NODE if node_is_true else swe.MEAN_NODE
             node_pos, _ = swe.calc_ut(jd, node_id, FLAGS_TROP)
             trop_rah = node_pos[0] % 360.0
-            ay = swe.get_ayanamsa_ut(jd) + NK_AYAN_OFFSET
-            rahu_L = (trop_rah - ay) % 360.0
+            ay = _ayanamsha_deg_ut(jd)
+            rahu_L = _sidereal_from_tropical(trop_rah, ay)
             ketu_L = (rahu_L + 180.0) % 360.0
             r_n, r_p = nak_pada(rahu_L)
             k_n, k_p = nak_pada(ketu_L)
@@ -277,14 +277,14 @@ def calculate():
 
         jd, _ = dt_to_jd(date_str, time_str, tz_str)
 
-        # Слагаме сидерален режим (Lahiri)
+        # глобален сидерален режим (само за инфо/съвместимост)
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
 
-        # Asc от сидерални къщи (Placidus) по Lahiri
-        houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_SID, hsys=b'P')
-        asc_lahiri = ascmc[0] % 360.0
-        # прилагаме същия offset, както за планетите
-        asc = (asc_lahiri - NK_AYAN_OFFSET) % 360.0
+        # Asc: тропически от houses_ex + същата айанамша+offset както за планетите
+        ayan = _ayanamsha_deg_ut(jd)
+        houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=b'P')
+        asc_trop = ascmc[0] % 360.0
+        asc = _sidereal_from_tropical(asc_trop, ayan)
 
         res = {
             "config": {
