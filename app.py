@@ -85,8 +85,9 @@ def _sidereal_from_tropical(trop_lon: float, ayan: float) -> float:
 
 def planet_longitudes(jd: float, use_sidereal: bool = True):
     """
-    1) calc_ut с FLAGS_TROP → тропикални дължини
+    1) calc_ut с FLAGS_TROP → тропикални дължини (+ скорости)
     2) ако use_sidereal=True → lon = trop - (Lahiri + NK_AYAN_OFFSET)
+    3) добавяме retrograde: True/False (без за Раху/Кету)
     """
     ayan = _ayanamsha_deg_ut(jd) if use_sidereal else 0.0
 
@@ -104,17 +105,22 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
     for pid, name in plist:
         pos, _ = swe.calc_ut(jd, pid, FLAGS_TROP)
         trop = pos[0] % 360.0
+        spd  = pos[3]                   # скорост (deg/day)
+        retro = spd < 0                 # ретро, ако е с отрицателна скорост
+
         lon  = _sidereal_from_tropical(trop, ayan) if use_sidereal else trop
         n, p = nak_pada(lon)
+
         out.append({
             "planet": name,
             "longitude": round(lon, 6),
             "sign": sign_of(lon),
             "nakshatra": n,
-            "pada": p
+            "pada": p,
+            "retrograde": retro
         })
 
-    # Раху/Кету (mean/true) със същата логика
+    # Раху/Кету (mean/true) — не ги отбелязваме като ретроградни визуално
     node_id = swe.TRUE_NODE if NODE == "TRUE" else swe.MEAN_NODE
     npos, _ = swe.calc_ut(jd, node_id, FLAGS_TROP)
     trop_rahu = npos[0] % 360.0
@@ -129,14 +135,16 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
         "longitude": round(rahu, 6),
         "sign": sign_of(rahu),
         "nakshatra": r_n,
-        "pada": r_p
+        "pada": r_p,
+        "retrograde": False
     })
     out.append({
         "planet": "Кету",
         "longitude": round(ketu, 6),
         "sign": sign_of(ketu),
         "nakshatra": k_n,
-        "pada": k_p
+        "pada": k_p,
+        "retrograde": False
     })
 
     return out
