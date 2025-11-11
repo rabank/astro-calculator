@@ -475,7 +475,7 @@ def debug():
         return jsonify({"ok": False, "error": str(e), "trace": traceback.format_exc()}), 500
 
 # ---------- CALCULATE ----------
-@app.route('/calculate', methods=['POST','OPTIONS'])
+@app.route('/calculate', methods=['POST', 'OPTIONS'])
 def calculate():
     if request.method == 'OPTIONS':
         return ('', 204)
@@ -509,12 +509,6 @@ def calculate():
         panchanga = None
         if sun_lon is not None and moon_lon is not None:
             panchanga = compute_panchanga(jd, dt_local, sun_lon, moon_lon)
-        
-        # Арудха Лагна
-        asc_index = SIGNS.index(sign_of(asc))
-        al_sign = compute_arudha_lagna(asc_index, planets)
-        if al_sign:
-            res["ArudhaLagna"] = al_sign
 
         # 8 Chara Karaka с Раху (без Кету)
         ck_map = compute_chara_karakas(planets)
@@ -523,6 +517,7 @@ def calculate():
             if name in ck_map:
                 p["chara_karaka"] = ck_map[name]
 
+        # Базов отговор
         res = {
             "config": {
                 "ayanamsha": AYAN,
@@ -537,6 +532,18 @@ def calculate():
             "Planets": planets
         }
 
+        # Арудха Лагна (Arudha Lagna), съвместима с фронта
+        try:
+            asc_index = SIGNS.index(sign_of(asc))
+            al_sign = compute_arudha_lagna(asc_index, planets)
+            if al_sign:
+                # фронтът очаква или {degree}, или {sign}
+                res["ArudhaLagna"] = {"sign": al_sign}
+        except Exception:
+            # не чупим нищо, ако нещо се обърка
+            pass
+
+        # Панчанга
         if panchanga:
             res["Panchanga"] = panchanga
 
