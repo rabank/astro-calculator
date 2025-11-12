@@ -381,6 +381,34 @@ def houses_safe(jd, lat, lon, flags=None, hsys=b'P'):
         except Exception:
             cusps, ascmc = swe.houses(jd, lat, lon, hsys)
             return (cusps, ascmc)
+def deg_in_sign(lon: float) -> float:
+    return lon % 30.0
+
+def navamsa_sign_index(sign_idx: int, deg_in: float) -> int:
+    """
+    D9 (Навамша) – правило на Парашара:
+    - Подвижни (Овен, Рак, Везни, Козирог): старт от същия знак
+    - Неподвижни (Телец, Лъв, Скорпион, Водолей): старт от 9-тия от себе си (+8)
+    - Двойствени (Близнаци, Дева, Стрелец, Риби): старт от 5-тия от себе си (+4)
+    После броим пада (0..8) и въртим от стартовия знак.
+    """
+    pada = int(deg_in / (30.0 / 9.0))  # 0..8
+
+    if sign_idx in (0, 3, 6, 9):         # подвижни
+        start = sign_idx
+    elif sign_idx in (1, 4, 7, 10):      # неподвижни
+        start = (sign_idx + 8) % 12
+    else:                                # двойствени
+        start = (sign_idx + 4) % 12
+
+    return (start + pada) % 12
+
+def d9_sign_name_from_lon(lon: float) -> str:
+    """Връща името на знака (от SIGNS) за даден сидерален лонгитуд в D9."""
+    sidx = int((lon % 360.0) // 30)
+    d_in = deg_in_sign(lon)
+    d9_idx = navamsa_sign_index(sidx, d_in)
+    return SIGNS[d9_idx]
 
 @app.after_request
 def add_cors(resp):
@@ -528,6 +556,10 @@ def calculate():
             name = p.get("planet")
             if name in ck_map:
                 p["chara_karaka"] = ck_map[name]
+        # --- D9 Навамша ---
+        d9_planets = [{"planet": p["planet"], "sign": d9_sign_name_from_lon(p["longitude"])}
+                      for p in planets]
+        d9_asc_sign = d9_sign_name_from_lon(asc)
 
         # Базов отговор
         res = {
@@ -541,7 +573,11 @@ def calculate():
                 "degree": round(asc, 6),
                 "sign": sign_of(asc)
             },
-            "Planets": planets
+            "Planets": planets,
+            "D9": {                                   # <--- ново
+                "Ascendant": {"sign": d9_asc_sign},
+                "Planets": d9_planets
+            }
         }
 
         # Арудха Лагна (Arudha Lagna), съвместима с фронта
