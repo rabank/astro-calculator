@@ -662,10 +662,24 @@ def calculate():
             name = p.get("planet")
             if name in ck_map:
                 p["chara_karaka"] = ck_map[name]
+                
         # --- D9 Навамша ---
-        d9_planets = [{"planet": p["planet"], "sign": d9_sign_name_from_lon(p["longitude"])}
-                      for p in planets]
+        d9_planets = []
+        for p in planets:
+            d9_sign = d9_sign_name_from_lon(p["longitude"])
+            d9_planets.append({
+                "planet": p["planet"],
+                "sign": d9_sign,
+                "retrograde": bool(p.get("retrograde"))
+            })
         d9_asc_sign = d9_sign_name_from_lon(asc)
+
+        # AL за D9 (по същото правило като при D1)
+        try:
+            asc_idx_d9 = SIGNS.index(d9_asc_sign)
+            al_d9_sign = compute_arudha_lagna(asc_idx_d9, d9_planets)
+        except Exception:
+            al_d9_sign = None
 
         # Базов отговор
         res = {
@@ -680,8 +694,9 @@ def calculate():
                 "sign": sign_of(asc)
             },
             "Planets": planets,
-            "D9": {                                   # <--- ново
+            "D9": {
                 "Ascendant": {"sign": d9_asc_sign},
+                "ArudhaLagna": ({"sign": al_d9_sign} if al_d9_sign else None),
                 "Planets": d9_planets
             }
         }
