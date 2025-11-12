@@ -365,6 +365,112 @@ def compute_panchanga(jd: float, dt_local, sun_lon: float, moon_lon: float):
             "lord": karana_lord,
         }
     }
+# ---------- VIMSHOTTARI DASHA ----------
+
+# редът на лордовете (съвпада с господарите на накшатри)
+DASHA_SEQ = ["Кету","Венера","Слънце","Луна","Марс","Раху","Юпитер","Сатурн","Меркурий"]
+# дължини (години) на махадашите
+DASHA_YEARS = {
+    "Кету": 7, "Венера": 20, "Слънце": 6, "Луна": 10, "Марс": 7,
+    "Раху": 18, "Юпитер": 16, "Сатурн": 19, "Меркурий": 17
+}
+SID_NAK_SPAN = 360.0 / 27.0
+
+def nak_index_from_lon(lon: float) -> int:
+    """0..26 индекс на накшатра по сидерален лонгитуд."""
+    return int(((lon % 360.0) + 360.0) % 360.0 // SID_NAK_SPAN)
+
+def years_to_days(y: float) -> float:
+    # тропическа година
+    return y * 365.2425
+
+def add_days(dt, days: float):
+    from datetime import timedelta
+    return dt + timedelta(days=days)
+
+def dasha_order_from(start_lord: str):
+    """Връща последователността на лордовете, започвайки от start_lord."""
+    i = DASHA_SEQ.index(start_lord)
+    return DASHA_SEQ[i:] + DASHA_SEQ[:i]
+
+def vimsottari_generate(birth_dt_utc: datetime, moon_lon_sid: float, horizon_years: float = 120.0):
+    """
+    Генерира Вимшоттари до 'horizon_years' от раждането.
+    Връща списък от махадаши с антар-даши вътре (2-ро ниво).
+    """
+    # начален лорд според лунната накшатра
+    nk_idx = nak_index_from_lon(moon_lon_sid)
+    start_lord = DASHA_SEQ[nk_idx % 9]
+
+    # степен в текущата накшатра → остатък от първата махадаша
+    start_of_nk = nk_idx * SID_NAK_SPAN
+    passed_in_nk = ((moon_lon_sid % 360.0) - start_of_nk) % SID_NAK_SPAN
+    frac = passed_in_nk / SID_NAK_SPAN            # 0..1 преминал дял
+    remain_frac = 1.0 - frac
+
+    order = dasha_order_from(start_lord)
+
+    out = []
+    t0 = birth_dt_utc
+    age0 = 0.0
+
+    # първа махадаша – остатък
+    first_y = DASHA_YEARS[start_lord] * remain_frac
+    t1 = add_days(t0, years_to_days(first_y))
+    out.append({
+        "lord": start_lord,
+        "start": t0.date().isoformat(),
+        "end":   t1.date().isoformat(),
+        "age_start": age0,
+        "age_end":   age0 + first_y,
+        "antar": []  # попълваме по-долу
+    })
+    # следващи махадаши
+    cur_t = t1
+    cur_age = age0 + first_y
+    # въртим цикъл докато стигнем хоризонта
+    k = 1
+    while cur_age < horizon_years + 1e-6:
+        lord = order[k % 9]
+        dur_y = float(DASHA_YEARS[lord])
+        start = cur_t
+        end   = add_days(start, years_to_days(dur_y))
+        out.append({
+            "lord": lord,
+            "start": start.date().isoformat(),
+            "end":   end.date().isoformat(),
+            "age_start": cur_age,
+            "age_end":   cur_age + dur_y,
+            "antar": []
+        })
+        cur_t = end
+        cur_age += dur_y
+        k += 1
+
+    # антар-даши за всяка махадаша
+    for row in out:
+        m_lord = row["lord"]
+        m_years = DASHA_YEARS[m_lord]
+        # редът на под-лордове започва от лорда на махадашата
+        sub_order = dasha_order_from(m_lord)
+        sub_start = datetime.fromisoformat(row["start"])
+        sub_d = 0.0
+        antar_rows = []
+        for s_lord in sub_order:
+            share = DASHA_YEARS[s_lord] / 120.0      # дял от 120-годишния цикъл
+            sub_y = m_years * share                  # години на антрадaша
+            s0 = add_days(sub_start, years_to_days(sub_d))
+            s1 = add_days(sub_start, years_to_days(sub_d + sub_y))
+            antar_rows.append({
+                "lord": s_lord,
+                "start": s0.date().isoformat(),
+                "end":   s1.date().isoformat(),
+                "years": sub_y
+            })
+            sub_d += sub_y
+        row["antar"] = antar_rows
+
+    return out
 
 def houses_safe(jd, lat, lon, flags=None, hsys=b'P'):
     """
@@ -594,6 +700,14 @@ def calculate():
         # Панчанга
         if panchanga:
             res["Panchanga"] = panchanga
+        # --- Вимшоттари-даша (на база сидералната Луна) ---
+        try:
+            if moon_lon is not None:
+                vim = vimsottari_generate(dt_utc, float(moon_lon), horizon_years=120.0)
+                if vim:
+                    res["Vimshottari"] = vim
+        except Exception:
+            pass
 
         return jsonify(res), 200
 
