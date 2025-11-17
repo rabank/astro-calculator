@@ -350,22 +350,31 @@ def compute_chara_karakas(planets):
 
 def compute_panchanga(jd: float, dt_local, sun_lon: float, moon_lon: float):
     """
-    Минимална Панчанга:
-    Титхи, Вара, Накшатра, Йога, Карана – име + управител.
+    Панчанга:
+    Титхи, Вара, Накшатра, Йога, Карана – име + управител + % остатък (където има смисъл).
     """
-    # Tithi
+
+    # ---------- TITHI ----------
     diff = (moon_lon - sun_lon) % 360.0
-    tithi_index = int(diff / 12.0)  # 0..29
+    tithi_size = 12.0  # градуса на една титхи
+    tithi_index = int(diff / tithi_size)  # 0..29
     tithi_index = max(0, min(29, tithi_index))
     tithi_name = TITHI_NAMES[tithi_index]
     tithi_lord = TITHI_LORD_SEQ[tithi_index % len(TITHI_LORD_SEQ)]
 
-    # Vara
+    # колко е минало / остава в текущата титхи
+    tithi_offset = diff - tithi_index * tithi_size   # 0..12
+    tithi_frac    = tithi_offset / tithi_size        # 0..1 (изминало)
+    tithi_left    = max(0.0, 1.0 - tithi_frac)       # 0..1 (остава)
+    tithi_left_pct = tithi_left * 100.0
+
+    # ---------- VARA ----------
     wd = dt_local.weekday()  # 0=Mon..6=Sun
     vara_name = VARA_NAMES[wd]
     vara_lord = VARA_LORDS[wd]
+    # тук НЕ даваме процент (няма смисъл) → няма left_percent
 
-    # Nakshatra
+    # ---------- NAKSHATRA ----------
     nak_name, _ = nak_pada(moon_lon)
     try:
         nak_idx = NAK.index(nak_name)
@@ -373,40 +382,66 @@ def compute_panchanga(jd: float, dt_local, sun_lon: float, moon_lon: float):
         nak_idx = 0
     nak_lord = NAK_LORD_SEQ[nak_idx % len(NAK_LORD_SEQ)]
 
-    # Yoga
+    nak_span   = 360.0 / 27.0
+    nak_offset = (moon_lon % 360.0) - nak_idx * nak_span     # 0..nak_span
+    nak_frac   = nak_offset / nak_span                       # изминало
+    nak_left   = max(0.0, 1.0 - nak_frac)
+    nak_left_pct = nak_left * 100.0
+
+    # ---------- YOGA ----------
     span = 360.0 / 27.0
     yoga_val = (sun_lon + moon_lon) % 360.0
     yoga_index = int(yoga_val / span)
     yoga_index = max(0, min(26, yoga_index))
     yoga_name = YOGA_NAMES[yoga_index]
-    yoga_lord = YOGA_LORDS[yoga_index]
+    yoga_lord = YOGA_LORDS[yoga_index]   # ползваш списъка, който оправихме
 
-    # Karana
+    yoga_offset = yoga_val - yoga_index * span
+    yoga_frac   = yoga_offset / span
+    yoga_left   = max(0.0, 1.0 - yoga_frac)
+    yoga_left_pct = yoga_left * 100.0
+
+    # ---------- KARANA ----------
     karana_name = current_karana_name(sun_lon, moon_lon)
     karana_lord = KARANA_LORDS.get(karana_name, "")
+
+    kar_span = 6.0  # 360/60
+    k_num = int(diff / kar_span) + 1     # 1..60
+    k_num = max(1, min(60, k_num))
+
+    kar_offset = diff - (k_num - 1) * kar_span  # 0..6
+    kar_frac   = kar_offset / kar_span
+    kar_left   = max(0.0, 1.0 - kar_frac)
+    kar_left_pct = kar_left * 100.0
 
     return {
         "tithi": {
             "name": tithi_name,
             "lord": tithi_lord,
+            "left_percent": tithi_left_pct,
         },
         "vara": {
             "name": vara_name,
             "lord": vara_lord,
+            # без left_percent – както искаш
         },
         "nakshatra": {
             "name": nak_name,
             "lord": nak_lord,
+            "left_percent": nak_left_pct,
         },
         "yoga": {
             "name": yoga_name,
             "lord": yoga_lord,
+            "left_percent": yoga_left_pct,
         },
         "karana": {
             "name": karana_name,
             "lord": karana_lord,
+            "left_percent": kar_left_pct,
         }
     }
+
 # ---------- VIMSHOTTARI DASHA ----------
 
 # редът на лордовете (съвпада с господарите на накшатри)
