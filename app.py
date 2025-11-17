@@ -92,8 +92,36 @@ YOGA_NAMES = [
     "Брахма","Индра","Вайдхрити"
 ]
 
-# за старт – същият цикъл като NAK_LORD_SEQ
-YOGA_LORD_SEQ = NAK_LORD_SEQ
+# Лордове на йогите – подредени 1:1 с YOGA_NAMES
+YOGA_LORDS = [
+    "Юпитер",   # Вишкумбха (Vishkambha)
+    "Слънце",   # Прити (Priti)
+    "Венера",   # Аюшман (Ayushman)
+    "Марс",     # Саубхагя (Saubhagya)
+    "Луна",     # Шобхана (Shobhana)
+    "Раху",     # Атиганда (Atiganda)
+    "Юпитер",   # Сукарма (Sukarman)
+    "Слънце",   # Дхрити (Dhriti)
+    "Венера",   # Шула (Shula)
+    "Марс",     # Ганда (Ganda)
+    "Луна",     # Вриддхи (Vriddhi)
+    "Раху",     # Дхрува (Dhruva)
+    "Юпитер",   # Вьягхата (Vyaghata)
+    "Слънце",   # Харшана (Harshana)  ← ТУК ИСКАМЕ СЛЪНЦЕ
+    "Венера",   # Ваджра (Vajra)
+    "Марс",     # Сиддхи (Siddhi)
+    "Луна",     # Вьятипата (Vyatipata)
+    "Раху",     # Варияна (Variyana)
+    "Юпитер",   # Паригха (Parigha)
+    "Слънце",   # Шива (Shiva)
+    "Венера",   # Сиддха (Siddha)
+    "Марс",     # Садхя (Sadhya)
+    "Луна",     # Шубха (Shubha)
+    "Раху",     # Шукла (Shukla)
+    "Юпитер",   # Брахма (Brahma)
+    "Слънце",   # Индра (Indra)
+    "Венера",   # Вайдхрити (Vaidhriti)
+]
 
 # Карани
 KARANA_MOVABLE = ["Бава","Балава","Каулaва","Тайтилa","Гара","Ваниджа","Вишти"]
@@ -351,7 +379,7 @@ def compute_panchanga(jd: float, dt_local, sun_lon: float, moon_lon: float):
     yoga_index = int(yoga_val / span)
     yoga_index = max(0, min(26, yoga_index))
     yoga_name = YOGA_NAMES[yoga_index]
-    yoga_lord = YOGA_LORD_SEQ[yoga_index % len(YOGA_LORD_SEQ)]
+    yoga_lord = YOGA_LORDS[yoga_index]
 
     # Karana
     karana_name = current_karana_name(sun_lon, moon_lon)
