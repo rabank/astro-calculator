@@ -125,24 +125,38 @@ def nak_pada(lon: float):
     return NAK[idx], pada
 
 def current_karana_name(sun_lon: float, moon_lon: float) -> str:
+    """
+    Връща името на текущата Карана по класическата схема:
+
+    1  -> Кимстугна (фиксирана)
+    2–57  -> подвижните (Бава, Балава, Каулaва, Тайтилa, Гара, Ваниджа, Вишти) по цикъл
+    58 -> Шакуни
+    59 -> Чатушпада
+    60 -> Нага
+    """
     diff = (moon_lon - sun_lon) % 360.0
-    k_num = int(diff / 6.0) + 1  # 1..60
+    k_num = int(diff / 6.0) + 1       # 1..60
 
     if k_num < 1:
         k_num = 1
     if k_num > 60:
         k_num = 60
 
-    if k_num >= 57:
-        mapping = {
-            57: "Шакуни",
-            58: "Чатушпада",
-            59: "Нага",
-            60: "Кимстугна"
-        }
-        return mapping.get(k_num, "Кимстугна")
+    # 1-ва карана – Кимстугна
+    if k_num == 1:
+        return "Кимстугна"
 
-    idx = (k_num - 1) % 7
+    # последните 3 фиксирани
+    if k_num >= 58:
+        mapping = {
+            58: "Шакуни",
+            59: "Чатушпада",
+            60: "Нага",
+        }
+        return mapping.get(k_num, "Нага")
+
+    # подвижните: 2..57 (56 карани = 8 цикъла по 7)
+    idx = (k_num - 2) % 7
     return KARANA_MOVABLE[idx]
 
 def dt_to_jd(date_str: str, time_str: str, tz_str: str):
