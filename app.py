@@ -187,14 +187,22 @@ def current_karana_name(sun_lon: float, moon_lon: float) -> str:
     idx = (k_num - 2) % 7
     return KARANA_MOVABLE[idx]
 
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+import swisseph as swe
+
 def dt_to_jd(date_str: str, time_str: str, tz_str: str):
-    dt_local = datetime.strptime(
-        f"{date_str} {time_str}", "%Y-%m-%d %H:%M"
-    ).replace(tzinfo=ZoneInfo(tz_str))
-    dt_utc   = dt_local.astimezone(timezone.utc)
-    ut_hour  = dt_utc.hour + dt_utc.minute/60.0 + dt_utc.second/3600.0
-    jd       = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)   # UT
+    tz = ZoneInfo(tz_str)
+
+    fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
+    dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
+
+    dt_utc  = dt_local.astimezone(timezone.utc)
+    ut_hour = dt_utc.hour + dt_utc.minute/60.0 + dt_utc.second/3600.0
+    jd      = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)  # UT
+
     return jd, dt_utc
+
 
 # ---- Флагове ----
 FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
