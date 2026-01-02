@@ -6,7 +6,6 @@ import os
 import swisseph as swe
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-from datetime import datetime, timezone, timedelta
 
 # ---- Swiss Ephemeris: път до ефемеридите ----
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -734,32 +733,20 @@ def calculate():
         jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
         dt_local = dt_utc.astimezone(ZoneInfo(tz_str))
 
-        # --- ASC / Houses: тропически домове -> сидерален ASC чрез айанамша ---
-        # ВАЖНО: за да стане 1:1 с DevaGuru, за домовете ползваме jd, изместен с ΔT (UT->TT).
-        ayan = _ayanamsha_deg_ut(jd)  # ayanamsha се чете по UT (get_ayanamsa_ut)
-
-        # ΔT в дни (примерно ~65 сек за 2006)
-        dt_days = swe.deltat(jd) / 86400.0
-        jd_houses = jd + dt_days if NK_DEVA_MODE else jd   # само ако искаш Deva 1:1
-
-        # тропически домове (не пипай ayan тук)
+        # Asc: тропически → сидерален (стабилно; работи като преди)
+        ayan = _ayanamsha_deg_ut(jd)
+        swe.set_topo(lon, lat, 0)
         houses, ascmc = houses_safe(
-            jd_houses,
+            jd,
             lat,
             lon,
-            flags=swe.FLG_SWIEPH,   # достатъчно за houses
+            flags=FLAGS_TROP | swe.FLG_TOPOCTR,
             hsys=b'P'
         )
-
         asc_trop = ascmc[0] % 360.0
         asc = _sidereal_from_tropical(asc_trop, ayan)
 
-
         # Asc: тропически → сидерален с нашата айанамша+offset
-        # ayan = _ayanamsha_deg_ut(jd)
-        # houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=b'P')
-        # asc_trop = ascmc[0] % 360.0
-        # asc = _sidereal_from_tropical(asc_trop, ayan)
 
         # Планети (сидерално)
         planets = planet_longitudes(jd, use_sidereal=True)
