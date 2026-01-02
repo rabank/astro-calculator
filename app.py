@@ -726,9 +726,16 @@ def calculate():
 
         # Asc: тропически → сидерален с нашата айанамша+offset
         ayan = _ayanamsha_deg_ut(jd)
-        houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=b'P')
+        swe.set_topo(lon, lat, 0)  # <-- ДОБАВИ ТОЗИ РЕД ТОЧНО ТУК
+        houses, ascmc = houses_safe(jd, lat, lon, flags=(FLAGS_TROP | swe.FLG_TOPOCTR, hsys=b'P')  # <-- СМЕНИ ТОЗИ РЕД
         asc_trop = ascmc[0] % 360.0
         asc = _sidereal_from_tropical(asc_trop, ayan)
+
+        # Asc: тропически → сидерален с нашата айанамша+offset
+        # ayan = _ayanamsha_deg_ut(jd)
+        # houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=b'P')
+        # asc_trop = ascmc[0] % 360.0
+        # asc = _sidereal_from_tropical(asc_trop, ayan)
 
         # Планети (сидерално)
         planets = planet_longitudes(jd, use_sidereal=True)
