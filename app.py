@@ -198,15 +198,16 @@ import swisseph as swe
 def dt_to_jd(date_str: str, time_str: str, tz_str: str):
     tz = ZoneInfo(tz_str)
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
-    dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
-    dt_utc = dt_local.astimezone(timezone.utc)
 
-    jd_ut = swe.julday(
-        dt_utc.year,
-        dt_utc.month,
-        dt_utc.day,
-        dt_utc.hour + dt_utc.minute / 60 + dt_utc.second / 3600
-    )
+    dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
+    dt_utc   = dt_local.astimezone(timezone.utc)
+
+    # ако имаш Deva режим/калибрация по UTC – върни го:
+    if NK_DEVA_MODE and NK_DEVA_UTC_OFFSET_SEC != 0:
+        dt_utc = dt_utc + timedelta(seconds=NK_DEVA_UTC_OFFSET_SEC)
+
+    ut_hour = dt_utc.hour + dt_utc.minute / 60.0 + dt_utc.second / 3600.0
+    jd_ut   = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)  # UT
 
     return jd_ut, dt_utc
 
@@ -214,10 +215,9 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
 FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
-def _ayanamsha_deg_ut(jd: float) -> float:
-    swe.set_sid_mode(swe.SIDM_LAHIRI)
-    base = swe.get_ayanamsa_ut(jd)
-    return base + NK_AYAN_OFFSET
+def _ayanamsha_deg_ut(jd_ut: float) -> float:
+    # sid mode се сетва ОТВЪН, тук само четем
+    return swe.get_ayanamsa_ut(jd_ut) + NK_AYAN_OFFSET
 
 def _sidereal_from_tropical(trop_lon: float, ayan: float) -> float:
     return (trop_lon - ayan) % 360.0
@@ -242,7 +242,7 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
         spd  = pos[3]
         retro = spd < 0
 
-        lon  = _sidereal_from_tropical(trop, ayan) if use_sidereal else trop
+        lon = ((trop - ayan) % 360.0) if use_sidereal else trop
         n, p = nak_pada(lon)
 
         out.append({
@@ -258,7 +258,8 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
     node_id = swe.TRUE_NODE if NODE == "TRUE" else swe.MEAN_NODE
     npos, _ = swe.calc_ut(jd, node_id, FLAGS_TROP)
     trop_rahu = npos[0] % 360.0
-    rahu = _sidereal_from_tropical(trop_rahu, ayan) if use_sidereal else trop_rahu
+
+    rahu = ((trop_rahu - ayan) % 360.0) if use_sidereal else trop_rahu
     ketu = (rahu + 180.0) % 360.0
 
     r_n, r_p = nak_pada(rahu)
@@ -282,6 +283,7 @@ def planet_longitudes(jd: float, use_sidereal: bool = True):
     })
 
     return out
+
     
 def compute_arudha_lagna(asc_sign_index, planets):
     """
