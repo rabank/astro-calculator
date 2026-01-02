@@ -728,6 +728,7 @@ def calculate():
         tz_str   = data.get('timezone')
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
+        print("DEBUG LOCATION:", lat, lon)
 
         jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
         dt_local = dt_utc.astimezone(ZoneInfo(tz_str))
