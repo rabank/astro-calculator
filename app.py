@@ -29,7 +29,7 @@ AYAN_MAP = {
 # Лек калибриращ offset за айанамша (в градуси).
 # 0.0 = чист Swiss Ephemeris (официално)
 # напр. -0.01064 ≈ -38.3" → приближава DevaGuru/Jataka за твоя тест
-NK_AYAN_OFFSET = float(os.getenv("NK_AYAN_OFFSET", "-0.0105913"))
+NK_AYAN_OFFSET = float(os.getenv("NK_AYAN_OFFSET", "0.0"))
 
 # базов сидерален режим (без offset-a; той се добавя ръчно)
 swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
@@ -743,7 +743,7 @@ def calculate():
             jd,
             lat,
             lon,
-            flags=FLAGS_TROP | swe.FLG_TOPOCTR,
+            flags=FLAGS_TROP,
             hsys=b'P'
         )
         asc_trop = ascmc[0] % 360.0
