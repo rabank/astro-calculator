@@ -735,18 +735,17 @@ def calculate():
         # инфо
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
 
-        # Asc: тропически → сидерален с нашата айанамша+offset
-        ayan = _ayanamsha_deg_ut(jd)
-        swe.set_topo(lon, lat, 0)  # <-- ДОБАВИ ТОЗИ РЕД ТОЧНО ТУК
+        # Ascendant — директно сидерален (DevaGuru style)
+        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+        swe.set_topo(lon, lat, 0)
         houses, ascmc = houses_safe(
             jd,
             lat,
             lon,
-            flags=FLAGS_TROP,
+            flags=swe.FLG_SIDEREAL | swe.FLG_TOPOCTR,
             hsys=b'P'
         )
-        asc_trop = ascmc[0] % 360.0
-        asc = _sidereal_from_tropical(asc_trop, ayan)
+        asc = ascmc[0] % 360.0
 
         # Asc: тропически → сидерален с нашата айанамша+offset
         # ayan = _ayanamsha_deg_ut(jd)
