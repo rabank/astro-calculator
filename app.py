@@ -34,6 +34,10 @@ NK_AYAN_OFFSET = float(os.getenv("NK_AYAN_OFFSET", "-0.0105913"))
 # базов сидерален режим (без offset-a; той се добавя ръчно)
 swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
 
+# === DevaGuru compatibility mode ===
+NK_DEVA_MODE = os.getenv("NK_DEVA_MODE", "0") == "1"
+NK_DEVA_UTC_OFFSET_SEC = float(os.getenv("NK_DEVA_UTC_OFFSET_SEC", "0"))
+
 # ------------------ константи ------------------
 SIGNS = [
     "Овен","Телец","Близнаци","Рак","Лъв","Дева",
@@ -196,9 +200,13 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
     dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
     dt_utc = dt_local.astimezone(timezone.utc)
+    if NK_DEVA_MODE and NK_DEVA_UTC_OFFSET_SEC != 0:
+        dt_utc = dt_utc + timedelta(seconds=NK_DEVA_UTC_OFFSET_SEC)
     ut_hour = dt_utc.hour + dt_utc.minute/60.0 + dt_utc.second/3600.0
     jd = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)
     return jd, dt_utc
+    
+
 
 # ---- Флагове ----
 FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
