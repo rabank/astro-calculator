@@ -732,9 +732,6 @@ def calculate():
         jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
         dt_local = dt_utc.astimezone(ZoneInfo(tz_str))
 
-        # инфо
-        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
-
         # Ascendant — директно сидерален (DevaGuru style)
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
         swe.set_topo(lon, lat, 0)
