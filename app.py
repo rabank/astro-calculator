@@ -505,8 +505,11 @@ def vimsottari_generate(birth_dt_utc: datetime, moon_lon_sid: float, horizon_yea
     t1 = add_days(t0, years_to_days(first_y))
     out.append({
         "lord": start_lord,
-        "start": t0.date().isoformat(),
-        "end":   t1.date().isoformat(),
+        "start": t0.isoformat(timespec="seconds"),
+        "end":   t1.isoformat(timespec="seconds"),
+        # предишно
+        # "start": t0.date().isoformat(),
+        # "end":   t1.date().isoformat(),
         "age_start": age0,
         "age_end":   age0 + first_y,
         "antar": []  # попълваме по-долу
