@@ -200,12 +200,18 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
     dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
     dt_utc = dt_local.astimezone(timezone.utc)
-    if NK_DEVA_MODE and NK_DEVA_UTC_OFFSET_SEC != 0:
-        dt_utc = dt_utc + timedelta(seconds=NK_DEVA_UTC_OFFSET_SEC)
-    ut_hour = dt_utc.hour + dt_utc.minute/60.0 + dt_utc.second/3600.0
-    jd = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)
-    return jd, dt_utc
-    
+    # UTC -> Julian Day (UT)
+    jd_ut = swe.julday(
+        dt_utc.year,
+        dt_utc.month,
+        dt_utc.day,
+        dt_utc.hour + dt_utc.minute/60 + dt_utc.second/3600
+    )
+    # ΔT (TT - UT)
+    delta_t = swe.deltat(jd_ut)
+    # Julian Day in TT (ЕТО ТОВА ЛИПСВАШЕ)
+    jd_tt = jd_ut + delta_t / 86400.0
+    return jd_tt, dt_utc
 
 
 # ---- Флагове ----
