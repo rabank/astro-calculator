@@ -466,8 +466,9 @@ def nak_index_from_lon(lon: float) -> int:
     return int(((lon % 360.0) + 360.0) % 360.0 // SID_NAK_SPAN)
 
 def years_to_days(y: float) -> float:
-    # тропическа година
-    return y * 365.2425
+    return y * 365.25
+    # тропическа година - астрономично точна
+    # return y * 365.2425
 
 def add_days(dt, days: float):
     from datetime import timedelta
