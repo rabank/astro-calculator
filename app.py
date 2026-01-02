@@ -733,15 +733,20 @@ def calculate():
         jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
         dt_local = dt_utc.astimezone(ZoneInfo(tz_str))
 
+        # ВАЖНО: фиксираме айанамша режима за всяко изчисление (за да няма "наследени" настройки)
+        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+
         # Asc: тропически → сидерален с нашата айанамша+offset
         ayan = _ayanamsha_deg_ut(jd)
-        houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=b'P')
+        houses, ascmc = houses_safe(
+            jd,
+            lat,
+            lon,
+            flags=FLAGS_TROP,
+            hsys=b'P'
+        )
         asc_trop = ascmc[0] % 360.0
         asc = _sidereal_from_tropical(asc_trop, ayan)
-        # ayan = _ayanamsha_deg_ut(jd)
-        # houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=b'P')
-        # asc_trop = ascmc[0] % 360.0
-        # asc = _sidereal_from_tropical(asc_trop, ayan)
 
         # Планети (сидерално)
         planets = planet_longitudes(jd, use_sidereal=True)
