@@ -34,6 +34,21 @@ NK_AYAN_OFFSET = float(os.getenv("NK_AYAN_OFFSET", "-0.0105913"))
 # базов сидерален режим (без offset-a; той се добавя ръчно)
 swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
 
+# --- Лагна (Ascendant) ---
+ayan = _ayanamsha_deg_ut(jd)
+
+# по желание: ако натиснеш бутона "DevaGuru" – закръгляме координатите
+# (НЕ пипаме планетите, само лагна/домове)
+lat_h = lat
+lon_h = lon
+if calc_type == "devaguru":
+    lat_h = round(lat, 4)   # като DevaGuru показва 43.2167
+    lon_h = round(lon, 1)   # като DevaGuru показва 27.6
+
+houses, ascmc = houses_safe(jd, lat_h, lon_h, flags=FLAGS_TROP, hsys=b'P')
+asc_trop = ascmc[0] % 360.0
+asc = _sidereal_from_tropical(asc_trop, ayan)
+
 # === DevaGuru compatibility mode ===
 NK_DEVA_MODE = os.getenv("NK_DEVA_MODE", "0") == "1"
 NK_DEVA_UTC_OFFSET_SEC = float(os.getenv("NK_DEVA_UTC_OFFSET_SEC", "0"))
@@ -722,6 +737,7 @@ def calculate():
         return ('', 204)
     try:
         data = request.get_json(force=True)
+        calc_type = data.get("calc_type", "standard")   # ---------- ПРЕВКЛЮЧВАТЕЛ ----------
         date_str = data.get('date')
         time_str = data.get('time')
         tz_str   = data.get('timezone')
