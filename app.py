@@ -34,21 +34,6 @@ NK_AYAN_OFFSET = float(os.getenv("NK_AYAN_OFFSET", "-0.0105913"))
 # базов сидерален режим (без offset-a; той се добавя ръчно)
 swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
 
-# --- Лагна (Ascendant) ---
-ayan = _ayanamsha_deg_ut(jd)
-
-# по желание: ако натиснеш бутона "DevaGuru" – закръгляме координатите
-# (НЕ пипаме планетите, само лагна/домове)
-lat_h = lat
-lon_h = lon
-if calc_type == "devaguru":
-    lat_h = round(lat, 4)   # като DevaGuru показва 43.2167
-    lon_h = round(lon, 1)   # като DevaGuru показва 27.6
-
-houses, ascmc = houses_safe(jd, lat_h, lon_h, flags=FLAGS_TROP, hsys=b'P')
-asc_trop = ascmc[0] % 360.0
-asc = _sidereal_from_tropical(asc_trop, ayan)
-
 # === DevaGuru compatibility mode ===
 NK_DEVA_MODE = os.getenv("NK_DEVA_MODE", "0") == "1"
 NK_DEVA_UTC_OFFSET_SEC = float(os.getenv("NK_DEVA_UTC_OFFSET_SEC", "0"))
@@ -751,17 +736,31 @@ def calculate():
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
 
         # Asc: тропически → сидерален с нашата айанамша+offset
+
+        # --- Лагна (Ascendant) ---
         ayan = _ayanamsha_deg_ut(jd)
-        swe.set_topo(lon, lat, 0)  # <-- ДОБАВИ ТОЗИ РЕД ТОЧНО ТУК
+
+        # ако е "devaguru" – ползваме техния стил за координати САМО за лагна/домове
+        lat_h = lat
+        lon_h = lon
+        if calc_type == "devaguru":
+            lat_h = round(lat, 4)   # напр. 43.2167
+            lon_h = round(lon, 1)   # напр. 27.6
+
+        # топо настройка (ползвай същите координати, които ще подадеш към houses)
+        swe.set_topo(lon_h, lat_h, 0)
+
         houses, ascmc = houses_safe(
             jd,
-            lat,
-            lon,
+            lat_h,
+            lon_h,
             flags=FLAGS_TROP | swe.FLG_TOPOCTR,
             hsys=b'P'
         )
+
         asc_trop = ascmc[0] % 360.0
         asc = _sidereal_from_tropical(asc_trop, ayan)
+
 
         # Asc: тропически → сидерален с нашата айанамша+offset
         # ayan = _ayanamsha_deg_ut(jd)
