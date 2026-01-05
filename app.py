@@ -738,29 +738,28 @@ def calculate():
         # Asc: тропически → сидерален с нашата айанамша+offset
 
         # --- Лагна (Ascendant) ---
-        ayan = _ayanamsha_deg_ut(jd)
-
-        # ако е "devaguru" – ползваме техния стил за координати САМО за лагна/домове
-        lat_h = lat
-        lon_h = lon
+        # --- DG / JH координати ---
         if calc_type == "devaguru":
-            lat_h = round(lat, 4)   # напр. 43.2167
-            lon_h = round(lon, 1)   # напр. 27.6
+            lat_use = round(lat, 4)
+            lon_use = round(lon, 1)
+        else:
+            lat_use = lat
+            lon_use = lon
 
-        # топо настройка (ползвай същите координати, които ще подадеш към houses)
-        swe.set_topo(lon_h, lat_h, 0)
+        # --- Лагна (Ascendant) ---
+        ayan = _ayanamsha_deg_ut(jd)
+        swe.set_topo(lon_use, lat_use, 0)
 
         houses, ascmc = houses_safe(
             jd,
-            lat_h,
-            lon_h,
+            lat_use,
+            lon_use,
             flags=FLAGS_TROP | swe.FLG_TOPOCTR,
             hsys=b'P'
         )
 
         asc_trop = ascmc[0] % 360.0
         asc = _sidereal_from_tropical(asc_trop, ayan)
-
 
         # Asc: тропически → сидерален с нашата айанамша+offset
         # ayan = _ayanamsha_deg_ut(jd)
@@ -769,7 +768,11 @@ def calculate():
         # asc = _sidereal_from_tropical(asc_trop, ayan)
 
         # Планети (сидерално)
+        # --- Планети (DG / JH) ---
+        if calc_type == "devaguru":
+            swe.set_topo(lon_use, lat_use, 0)
         planets = planet_longitudes(jd, use_sidereal=True)
+
 
         # Слънце/Луна за Панчанга (ползваме вече сидералните)
         sun_lon = next((p["longitude"] for p in planets if p["planet"] == "Слънце"), None)
