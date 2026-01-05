@@ -29,7 +29,13 @@ AYAN_MAP = {
 # Лек калибриращ offset за айанамша (в градуси).
 # 0.0 = чист Swiss Ephemeris (официално)
 # напр. -0.01064 ≈ -38.3" → приближава DevaGuru/Jataka за твоя тест
-NK_AYAN_OFFSET = float(os.getenv("NK_AYAN_OFFSET", "-0.0105913"))
+
+# Backward compatible:
+# - ако имаш стария NK_AYAN_OFFSET (както сега) => ще се ползва за DG
+# - JH по подразбиране е 0.0
+NK_AYAN_OFFSET_DG = float(os.getenv("NK_AYAN_OFFSET_DG", os.getenv("NK_AYAN_OFFSET", "-0.0105913")))
+NK_AYAN_OFFSET_JH = float(os.getenv("NK_AYAN_OFFSET_JH", "0.0"))
+
 
 # базов сидерален режим (без offset-a; той се добавя ръчно)
 swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
@@ -214,16 +220,16 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
 FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
-def _ayanamsha_deg_ut(jd: float) -> float:
+def _ayanamsha_deg_ut(jd: float, offset_deg: float) -> float:
     swe.set_sid_mode(swe.SIDM_LAHIRI)
     base = swe.get_ayanamsa_ut(jd)
-    return base + NK_AYAN_OFFSET
+    return base + float(offset_deg)
 
 def _sidereal_from_tropical(trop_lon: float, ayan: float) -> float:
     return (trop_lon - ayan) % 360.0
 
-def planet_longitudes(jd: float, use_sidereal: bool = True):
-    ayan = _ayanamsha_deg_ut(jd) if use_sidereal else 0.0
+def planet_longitudes(jd: float, use_sidereal: bool = True, ayan_override: float | None = None):
+    ayan = float(ayan_override) if (use_sidereal and ayan_override is not None) else (_ayanamsha_deg_ut(jd, NK_AYAN_OFFSET_JH) if use_sidereal else 0.0)
 
     plist = [
         (swe.SUN,     "Слънце"),
@@ -747,7 +753,8 @@ def calculate():
             lon_use = lon
 
         # --- Лагна (Ascendant) ---
-        ayan = _ayanamsha_deg_ut(jd)
+        ayan_off = NK_AYAN_OFFSET_DG if calc_type == "devaguru" else NK_AYAN_OFFSET_JH
+        ayan = _ayanamsha_deg_ut(jd, ayan_off)
         swe.set_topo(lon_use, lat_use, 0)
 
         houses, ascmc = houses_safe(
@@ -771,8 +778,7 @@ def calculate():
         # --- Планети (DG / JH) ---
         if calc_type == "devaguru":
             swe.set_topo(lon_use, lat_use, 0)
-        planets = planet_longitudes(jd, use_sidereal=True)
-
+        planets = planet_longitudes(jd, use_sidereal=True, ayan_override=ayan)
 
         # Слънце/Луна за Панчанга (ползваме вече сидералните)
         sun_lon = next((p["longitude"] for p in planets if p["planet"] == "Слънце"), None)
