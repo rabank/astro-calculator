@@ -829,17 +829,17 @@ def calculate():
         except Exception:
             al_d9_sign = None
 
+        # стойност само за показване в config (да не гърми)
+        if calc_type == "devaguru":
+             ayan_off = NK_AYAN_OFFSET_DG
+        else:
+            ayan_off = 0.0
         # Базов отговор
         res = {
             "config": {
                 "ayanamsha": AYAN,
                 "node_type": NODE,
                 "ephe_path": EPHE_PATH,
-                # стойност само за показване в config (да не гърми)
-                if calc_type == "devaguru":
-                    ayan_off = NK_AYAN_OFFSET_DG
-                else:
-                    ayan_off = 0.0
                 "ayan_offset": ayan_off
             },
             "Ascendant": {
