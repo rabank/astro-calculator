@@ -763,15 +763,19 @@ def calculate():
             lon_use = lon
 
         # --- Лагна (Ascendant) ---
-        ayan_off = NK_AYAN_OFFSET_DG if calc_type == "devaguru" else NK_AYAN_OFFSET_JH
-        ayan = _ayanamsha_deg_ut(jd, ayan_off)
-        swe.set_topo(lon_use, lat_use, 0)
-
+        if calc_type == "devaguru":
+            ayan = _ayanamsha_deg_ut(jd, NK_AYAN_OFFSET_DG)   # DG си остава както е
+        else:
+            ayan = swe.get_ayanamsa_ut(jd)    # JH = чист Swiss Ephemeris
+            
+        # topo само за DG
+        flags_houses = FLAGS_TROP
+        if calc_type == "devaguru":
+            swe.set_topo(lon_use, lat_use, 0)
+            flags_houses |= swe.FLG_TOPOCTR
         houses, ascmc = houses_safe(
-            jd,
-            lat_use,
-            lon_use,
-            flags=FLAGS_TROP | swe.FLG_TOPOCTR,
+            jd, lat_use, lon_use,
+            flags=flags_houses,
             hsys=HSYS
         )
 
