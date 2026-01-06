@@ -581,7 +581,7 @@ def vimsottari_generate(birth_dt_utc: datetime, moon_lon_sid: float, horizon_yea
 
     return out
 
-def houses_safe(jd, lat, lon, flags=None, hsys=HSYS):
+def houses_safe(jd, lat, lon, flags=None, hsys=b'P'):
     """
     Унифициран достъп до houses_ex / houses за различни версии на pyswisseph.
     """
@@ -656,9 +656,9 @@ def debug():
 
         def compute_variant(label, ayanamsha_const, node_is_true):
             swe.set_sid_mode(ayanamsha_const)
-            houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=HSYS)
+            houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=b'P')
             asc_trop = ascmc[0] % 360.0
-            ay = _ayanamsha_deg_ut(jd)
+            ay = _ayanamsha_deg_ut(jd, NK_AYAN_OFFSET_JH)
             asc = _sidereal_from_tropical(asc_trop, ay)
 
             res = {
@@ -722,7 +722,8 @@ def debug():
 
         return jsonify({
             "ok": True,
-            "ayan_offset": NK_AYAN_OFFSET,
+            "ayan_offset_dg": NK_AYAN_OFFSET_DG,
+            "ayan_offset_jh": NK_AYAN_OFFSET_JH,
             "sidereal_variants": variants
         }), 200
 
@@ -737,11 +738,7 @@ def calculate():
     try:
         data = request.get_json(force=True)
         calc_type = data.get("calc_type", "standard")   # ---------- ПРЕВКЛЮЧВАТЕЛ ----------
-        # House system според режима
-        if calc_type == "devaguru":
-            HSYS = b'W'   # Whole Sign за DG
-        else:
-            HSYS = b'P'   # Placidus за JH
+        HSYS = b'P'
         date_str = data.get('date')
         time_str = data.get('time')
         tz_str   = data.get('timezone')
@@ -780,7 +777,9 @@ def calculate():
 
         asc_trop = ascmc[0] % 360.0
         asc = _sidereal_from_tropical(asc_trop, ayan)
-
+        # DG lagna correction (традиция deva.guru)
+        if calc_type == "devaguru":
+            asc = (asc - 0.303) % 360.0
         # Asc: тропически → сидерален с нашата айанамша+offset
         # ayan = _ayanamsha_deg_ut(jd)
         # houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=HSYS)
