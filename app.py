@@ -788,10 +788,9 @@ def calculate():
 
         # Планети (сидерално)
         # --- Планети (DG / JH) ---
-        topo_on = (calc_type == "devaguru")
+        # Планети винаги геоцентрично (иначе Луната в DG избяга с минути)
+        planets = planet_longitudes(jd, use_sidereal=True, ayan_override=ayan, topo=False)
 
-        # за DG вече така или иначе сме сетнали swe.set_topo(lon_use, lat_use, 0) по-горе
-        planets = planet_longitudes(jd, use_sidereal=True, ayan_override=ayan, topo=topo_on)
 
         # Слънце/Луна за Панчанга (ползваме вече сидералните)
         sun_lon = next((p["longitude"] for p in planets if p["planet"] == "Слънце"), None)
