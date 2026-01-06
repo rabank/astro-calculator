@@ -228,8 +228,14 @@ def _ayanamsha_deg_ut(jd: float, offset_deg: float) -> float:
 def _sidereal_from_tropical(trop_lon: float, ayan: float) -> float:
     return (trop_lon - ayan) % 360.0
 
-def planet_longitudes(jd: float, use_sidereal: bool = True, ayan_override: float | None = None):
-    ayan = float(ayan_override) if (use_sidereal and ayan_override is not None) else (_ayanamsha_deg_ut(jd, NK_AYAN_OFFSET_JH) if use_sidereal else 0.0)
+def planet_longitudes(jd: float, use_sidereal: bool = True, ayan_override: float | None = None, topo: bool = False):
+    # ако е подаден ayan_override -> ползваме него (вече включва offset-а за режима)
+    ayan = float(ayan_override) if (use_sidereal and ayan_override is not None) else (
+        _ayanamsha_deg_ut(jd, NK_AYAN_OFFSET_JH) if use_sidereal else 0.0
+    )
+
+    # !!! КЛЮЧОВО: ако topo=True -> добавяме FLG_TOPOCTR към изчисленията на планетите
+    flags = FLAGS_TROP | (swe.FLG_TOPOCTR if topo else 0)
 
     plist = [
         (swe.SUN,     "Слънце"),
@@ -243,7 +249,7 @@ def planet_longitudes(jd: float, use_sidereal: bool = True, ayan_override: float
 
     out = []
     for pid, name in plist:
-        pos, _ = swe.calc_ut(jd, pid, FLAGS_TROP)
+        pos, _ = swe.calc_ut(jd, pid, flags)
         trop = pos[0] % 360.0
         spd  = pos[3]
         retro = spd < 0
@@ -260,10 +266,11 @@ def planet_longitudes(jd: float, use_sidereal: bool = True, ayan_override: float
             "retrograde": retro
         })
 
-    # Раху/Кету
+    # Раху/Кету (същите флагове!)
     node_id = swe.TRUE_NODE if NODE == "TRUE" else swe.MEAN_NODE
-    npos, _ = swe.calc_ut(jd, node_id, FLAGS_TROP)
+    npos, _ = swe.calc_ut(jd, node_id, flags)
     trop_rahu = npos[0] % 360.0
+
     rahu = _sidereal_from_tropical(trop_rahu, ayan) if use_sidereal else trop_rahu
     ketu = (rahu + 180.0) % 360.0
 
@@ -288,6 +295,7 @@ def planet_longitudes(jd: float, use_sidereal: bool = True, ayan_override: float
     })
 
     return out
+
     
 def compute_arudha_lagna(asc_sign_index, planets):
     """
@@ -776,9 +784,10 @@ def calculate():
 
         # Планети (сидерално)
         # --- Планети (DG / JH) ---
-        if calc_type == "devaguru":
-            swe.set_topo(lon_use, lat_use, 0)
-        planets = planet_longitudes(jd, use_sidereal=True, ayan_override=ayan)
+        topo_on = (calc_type == "devaguru")
+
+        # за DG вече така или иначе сме сетнали swe.set_topo(lon_use, lat_use, 0) по-горе
+        planets = planet_longitudes(jd, use_sidereal=True, ayan_override=ayan, topo=topo_on)
 
         # Слънце/Луна за Панчанга (ползваме вече сидералните)
         sun_lon = next((p["longitude"] for p in planets if p["planet"] == "Слънце"), None)
