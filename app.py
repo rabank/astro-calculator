@@ -828,7 +828,7 @@ def calculate():
                 "ayanamsha": AYAN,
                 "node_type": NODE,
                 "ephe_path": EPHE_PATH,
-                "ayan_offset": NK_AYAN_OFFSET
+                "ayan_offset": ayan_off
             },
             "Ascendant": {
                 "degree": round(asc, 6),
@@ -877,7 +877,7 @@ def calculate():
 # ---------- ROOT ----------
 @app.route('/')
 def home():
-    return f"Astro Calculator API is running (AYAN={AYAN}, NODE={NODE}, AYAN_OFFSET={NK_AYAN_OFFSET})"
+    return f"Astro Calculator API is running (AYAN={AYAN}, NODE={NODE}, OFF_DG={NK_AYAN_OFFSET_DG}, OFF_JH={NK_AYAN_OFFSET_JH})"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
