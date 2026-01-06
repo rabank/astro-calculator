@@ -781,9 +781,7 @@ def calculate():
 
         asc_trop = ascmc[0] % 360.0
         asc = _sidereal_from_tropical(asc_trop, ayan)
-        # DG lagna correction (традиция deva.guru)
-        if calc_type == "devaguru":
-            asc = (asc - 0.303) % 360.0
+       
         # Asc: тропически → сидерален с нашата айанамша+offset
         # ayan = _ayanamsha_deg_ut(jd)
         # houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=HSYS)
