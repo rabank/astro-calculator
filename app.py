@@ -6,7 +6,12 @@ import os
 import swisseph as swe
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
+try:
+    from timezonefinder import TimezoneFinder
+except Exception:
+    TimezoneFinder = None
 
+TF = TimezoneFinder() if TimezoneFinder else None
 # ---- Swiss Ephemeris: път до ефемеридите ----
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EPHE_PATH = os.path.join(BASE_DIR, "ephe")  # папка "ephe" до app.py
@@ -749,15 +754,17 @@ def calculate():
         # 1) какво е дошло от браузъра (за лог/проверка)
         tz_sent = (data.get('timezone') or '').strip()
 
+        # 2) timezone по координати (истината) – ако имаме timezonefinder
+        if TF:
+            tz_geo = TF.timezone_at(lat=lat, lng=lon) or TF.closest_timezone_at(lat=lat, lng=lon)
+        else:
+            tz_geo = None
+
         # 3) какво реално ще ползваме
-        tz_str = data.get('timezone')   # идва от фронтенда
-        tz = ZoneInfo(tz_str)
+        tz_str = tz_geo or tz_sent or "UTC"
 
-        dt_local = datetime.strptime(
-            f"{date_str} {time_str}", fmt
-        ).replace(tzinfo=tz)
-
-        dt_utc = dt_local.astimezone(timezone.utc)
+        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
+        dt_local = dt_utc.astimezone(ZoneInfo(tz_str))
 
         # инфо
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
