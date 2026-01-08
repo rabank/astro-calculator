@@ -3,4 +3,3 @@ Flask-Cors==4.0.0
 pyswisseph==2.10.03.1
 tzdata==2024.2
 timezonefinder==6.1.9
-h3==3.7.6
