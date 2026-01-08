@@ -202,7 +202,6 @@ from zoneinfo import ZoneInfo
 import swisseph as swe
 
 def dt_to_jd(date_str: str, time_str: str, tz_str: str):
-    tz_str = (tz_str or "UTC").strip()
     tz = ZoneInfo(tz_str)
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
     dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
@@ -742,22 +741,12 @@ def calculate():
         HSYS = b'P'
         date_str = data.get('date')
         time_str = data.get('time')
-
+        tz_str   = data.get('timezone')
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
 
-        # 1) какво е дошло от браузъра (за лог/проверка)
-        tz_sent = (data.get('timezone') or '').strip()
-
-        # 3) какво реално ще ползваме
-        tz_str = data.get('timezone')   # идва от фронтенда
-        tz = ZoneInfo(tz_str)
-
-        dt_local = datetime.strptime(
-            f"{date_str} {time_str}", fmt
-        ).replace(tzinfo=tz)
-
-        dt_utc = dt_local.astimezone(timezone.utc)
+        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
+        dt_local = dt_utc.astimezone(ZoneInfo(tz_str))
 
         # инфо
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
@@ -774,25 +763,23 @@ def calculate():
             lon_use = lon
 
         # --- Лагна (Ascendant) ---
-        if calc_type == "devaguru":
-            ayan = _ayanamsha_deg_ut(jd, NK_AYAN_OFFSET_DG)   # DG си остава както е
-        else:
-            ayan = swe.get_ayanamsa_ut(jd)    # JH = чист Swiss Ephemeris
-            
-        # topo само за DG
-        flags_houses = FLAGS_TROP
-        if calc_type == "devaguru":
-            swe.set_topo(lon_use, lat_use, 0)
-            flags_houses |= swe.FLG_TOPOCTR
+        ayan_off = NK_AYAN_OFFSET_DG if calc_type == "devaguru" else NK_AYAN_OFFSET_JH
+        ayan = _ayanamsha_deg_ut(jd, ayan_off)
+        swe.set_topo(lon_use, lat_use, 0)
+
         houses, ascmc = houses_safe(
-            jd, lat_use, lon_use,
-            flags=flags_houses,
+            jd,
+            lat_use,
+            lon_use,
+            flags=FLAGS_TROP | swe.FLG_TOPOCTR,
             hsys=HSYS
         )
 
         asc_trop = ascmc[0] % 360.0
         asc = _sidereal_from_tropical(asc_trop, ayan)
-       
+        # DG lagna correction (традиция deva.guru)
+        if calc_type == "devaguru":
+            asc = (asc - 0.303) % 360.0
         # Asc: тропически → сидерален с нашата айанамша+offset
         # ayan = _ayanamsha_deg_ut(jd)
         # houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=HSYS)
@@ -838,20 +825,13 @@ def calculate():
         except Exception:
             al_d9_sign = None
 
-        # стойност само за показване в config (да не гърми)
-        if calc_type == "devaguru":
-             ayan_off = NK_AYAN_OFFSET_DG
-        else:
-            ayan_off = 0.0
-
+        # Базов отговор
         res = {
             "config": {
                 "ayanamsha": AYAN,
                 "node_type": NODE,
                 "ephe_path": EPHE_PATH,
-                "ayan_offset": ayan_off,
-                "tz_used": tz_str,
-                "tz_sent": tz_sent
+                "ayan_offset": ayan_off
             },
             "Ascendant": {
                 "degree": round(asc, 6),
