@@ -6,6 +6,8 @@ import os
 import swisseph as swe
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
+from timezonefinder import TimezoneFinder
+TF = TimezoneFinder()
 
 # ---- Swiss Ephemeris: път до ефемеридите ----
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -202,6 +204,7 @@ from zoneinfo import ZoneInfo
 import swisseph as swe
 
 def dt_to_jd(date_str: str, time_str: str, tz_str: str):
+    tz_str = (tz_str or "UTC").strip()
     tz = ZoneInfo(tz_str)
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
     dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
@@ -741,9 +744,18 @@ def calculate():
         HSYS = b'P'
         date_str = data.get('date')
         time_str = data.get('time')
-        tz_str   = data.get('timezone')
+
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
+
+        # 1) какво е дошло от браузъра (за лог/проверка)
+        tz_sent = (data.get('timezone') or '').strip()
+
+        # 2) timezone по координати (истината)
+        tz_geo = TF.timezone_at(lat=lat, lng=lon) or TF.closest_timezone_at(lat=lat, lng=lon)
+
+        # 3) какво реално ще ползваме
+        tz_str = tz_geo or tz_sent or "UTC"
 
         jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
         dt_local = dt_utc.astimezone(ZoneInfo(tz_str))
@@ -832,13 +844,15 @@ def calculate():
              ayan_off = NK_AYAN_OFFSET_DG
         else:
             ayan_off = 0.0
-        # Базов отговор
+
         res = {
             "config": {
                 "ayanamsha": AYAN,
                 "node_type": NODE,
                 "ephe_path": EPHE_PATH,
-                "ayan_offset": ayan_off
+                "ayan_offset": ayan_off,
+                "tz_used": tz_str,
+                "tz_sent": tz_sent
             },
             "Ascendant": {
                 "degree": round(asc, 6),
