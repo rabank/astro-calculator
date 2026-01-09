@@ -7,6 +7,24 @@ import swisseph as swe
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+# Optional: timezone from coordinates (no JS dependency)
+try:
+    from timezonefinder import TimezoneFinder  # pip: timezonefinder
+    _TZF = TimezoneFinder()
+except Exception:
+    TimezoneFinder = None
+    _TZF = None
+
+def tz_from_coords(lat: float, lon: float) -> str | None:
+    """Return IANA timezone name from coordinates, or None."""
+    try:
+        if _TZF is None:
+            return None
+        # timezonefinder expects (lng, lat)
+        return _TZF.timezone_at(lng=float(lon), lat=float(lat))
+    except Exception:
+        return None
+
 # ---- Swiss Ephemeris: път до ефемеридите ----
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EPHE_PATH = os.path.join(BASE_DIR, "ephe")  # папка "ephe" до app.py
@@ -741,7 +759,19 @@ def calculate():
         HSYS = b'P'
         date_str = data.get('date')
         time_str = data.get('time')
-        tz_str   = data.get('timezone')
+        tz_sent = data.get('timezone')
+        # Auto timezone from coordinates (fixes 'London with Sofia time')
+        tz_coord = tz_from_coords(lat, lon)
+        # Rule:
+        # - if client sends tz='auto' or empty -> use tz from coords
+        # - if client sends something but it's явно дефолт (Europe/Sofia) and coords are elsewhere -> override
+        # - иначе уважаваме изпратеното
+        if (not tz_sent) or str(tz_sent).lower() == 'auto':
+            tz_str = tz_coord or 'UTC'
+        else:
+            tz_str = tz_sent
+            if tz_coord and tz_sent == 'Europe/Sofia' and tz_coord != tz_sent:
+                tz_str = tz_coord
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
 
@@ -831,7 +861,10 @@ def calculate():
                 "ayanamsha": AYAN,
                 "node_type": NODE,
                 "ephe_path": EPHE_PATH,
-                "ayan_offset": ayan_off
+                "ayan_offset": ayan_off,
+                "tz_sent": tz_sent,
+                "tz_used": tz_str,
+                "tz_from_coords": tz_coord
             },
             "Ascendant": {
                 "degree": round(asc, 6),
