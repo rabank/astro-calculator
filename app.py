@@ -7,23 +7,35 @@ import swisseph as swe
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-# Optional: timezone from coordinates (no JS dependency)
+# --- Timezone auto-detect from coordinates (no JS needed) ---
 try:
-    from timezonefinder import TimezoneFinder  # pip: timezonefinder
-    _TZF = TimezoneFinder()
+    from timezonefinder import TimezoneFinder
+    _TZF = TimezoneFinder(in_memory=True)
 except Exception:
-    TimezoneFinder = None
     _TZF = None
 
-def tz_from_coords(lat: float, lon: float) -> str | None:
-    """Return IANA timezone name from coordinates, or None."""
+def _safe_zoneinfo(tz_name: str):
+    """Return ZoneInfo(tz_name) or UTC if tz_name is invalid."""
     try:
-        if _TZF is None:
-            return None
-        # timezonefinder expects (lng, lat)
-        return _TZF.timezone_at(lng=float(lon), lat=float(lat))
+        return ZoneInfo(tz_name)
     except Exception:
-        return None
+        return timezone.utc
+
+def resolve_timezone(lat: float, lon: float, tz_sent: str | None = None) -> str:
+    """Prefer timezone from coordinates; fall back to tz_sent; then UTC."""
+    tz_sent = (tz_sent or '').strip()
+    # If tz_sent is not an IANA name (e.g. 'GMT+3'), we ignore it.
+    if tz_sent and ('/' not in tz_sent):
+        tz_sent = ''
+    if _TZF is not None:
+        try:
+            tz = _TZF.timezone_at(lat=lat, lng=lon) or _TZF.closest_timezone_at(lat=lat, lng=lon)
+            if tz:
+                return tz
+        except Exception:
+            pass
+    return tz_sent or 'UTC'
+
 
 # ---- Swiss Ephemeris: път до ефемеридите ----
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -220,7 +232,7 @@ from zoneinfo import ZoneInfo
 import swisseph as swe
 
 def dt_to_jd(date_str: str, time_str: str, tz_str: str):
-    tz = ZoneInfo(tz_str)
+    tz = _safe_zoneinfo(tz_str)
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
     dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
     dt_utc = dt_local.astimezone(timezone.utc)
@@ -760,23 +772,16 @@ def calculate():
         date_str = data.get('date')
         time_str = data.get('time')
         tz_sent = data.get('timezone')
-        # Auto timezone from coordinates (fixes 'London with Sofia time')
-        tz_coord = tz_from_coords(lat, lon)
-        # Rule:
-        # - if client sends tz='auto' or empty -> use tz from coords
-        # - if client sends something but it's явно дефолт (Europe/Sofia) and coords are elsewhere -> override
-        # - иначе уважаваме изпратеното
-        if (not tz_sent) or str(tz_sent).lower() == 'auto':
-            tz_str = tz_coord or 'UTC'
-        else:
-            tz_str = tz_sent
-            if tz_coord and tz_sent == 'Europe/Sofia' and tz_coord != tz_sent:
-                tz_str = tz_coord
+        tz_str   = tz_sent
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
 
+        # Автоматично време-зона по координати (иначе Лондон може да остане 'Europe/Sofia')
+        tz_str = resolve_timezone(lat, lon, tz_sent)
+
+
         jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
-        dt_local = dt_utc.astimezone(ZoneInfo(tz_str))
+        dt_local = dt_utc.astimezone(_safe_zoneinfo(tz_str))
 
         # инфо
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
@@ -861,10 +866,9 @@ def calculate():
                 "ayanamsha": AYAN,
                 "node_type": NODE,
                 "ephe_path": EPHE_PATH,
-                "ayan_offset": ayan_off,
+                "ayan_offset": ayan_off
                 "tz_sent": tz_sent,
-                "tz_used": tz_str,
-                "tz_from_coords": tz_coord
+                "tz_used": tz_str
             },
             "Ascendant": {
                 "degree": round(asc, 6),
