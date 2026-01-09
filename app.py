@@ -866,7 +866,7 @@ def calculate():
                 "ayanamsha": AYAN,
                 "node_type": NODE,
                 "ephe_path": EPHE_PATH,
-                "ayan_offset": ayan_off
+                "ayan_offset": ayan_off,
                 "tz_sent": tz_sent,
                 "tz_used": tz_str
             },
