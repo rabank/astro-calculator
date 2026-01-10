@@ -790,31 +790,24 @@ def calculate():
 
         # --- Лагна (Ascendant) ---
         # --- DG / JH координати ---
-        if calc_type == "devaguru":
-            lat_use = round(lat, 4)
-            lon_use = round(lon, 1)
-        else:
-            lat_use = lat
-            lon_use = lon
+        lat_use = float(lat)
+        lon_use = float(lon)
 
         # --- Лагна (Ascendant) ---
         ayan_off = NK_AYAN_OFFSET_DG if calc_type == "devaguru" else NK_AYAN_OFFSET_JH
         ayan = _ayanamsha_deg_ut(jd, ayan_off)
-        swe.set_topo(lon_use, lat_use, 0)
-
+        
         houses, ascmc = houses_safe(
             jd,
             lat_use,
             lon_use,
-            flags=FLAGS_TROP | swe.FLG_TOPOCTR,
+            flags=FLAGS_TROP,
             hsys=HSYS
         )
 
         asc_trop = ascmc[0] % 360.0
         asc = _sidereal_from_tropical(asc_trop, ayan)
-        # DG lagna correction (традиция deva.guru)
-        if calc_type == "devaguru":
-            asc = (asc - 0.303) % 360.0
+        
         # Asc: тропически → сидерален с нашата айанамша+offset
         # ayan = _ayanamsha_deg_ut(jd)
         # houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=HSYS)
