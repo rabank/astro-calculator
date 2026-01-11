@@ -811,13 +811,18 @@ def calculate():
         ayan_off = NK_AYAN_OFFSET_DG if calc_type == "devaguru" else NK_AYAN_OFFSET_JH
         ayan = _ayanamsha_deg_ut(jd, ayan_off)
         
+        house_flags = FLAGS_TROP
+        if calc_type == "standard":  # JH
+            house_flags = FLAGS_TROP | swe.FLG_TOPOCTR
+
         houses, ascmc = houses_safe(
             jd,
             lat_use,
             lon_use,
-            flags=FLAGS_TROP,
+            flags=house_flags,
             hsys=HSYS
         )
+
 
         asc_trop = ascmc[0] % 360.0
         asc = _sidereal_from_tropical(asc_trop, ayan)
