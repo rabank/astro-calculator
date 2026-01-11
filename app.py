@@ -231,15 +231,17 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 import swisseph as swe
 
-def dt_to_jd(date_str: str, time_str: str, tz_str: str):
+def dt_to_jd(date_str: str, time_str: str, tz_str: str, utc_offset_sec: float = 0.0) -> Tuple[float, datetime]:
     tz = _safe_zoneinfo(tz_str)
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
     dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
     dt_utc = dt_local.astimezone(timezone.utc)
 
     # (по желание) DevaGuru UTC micro-shift – ако го ползваш
-    if NK_DEVA_MODE and NK_DEVA_UTC_OFFSET_SEC != 0:
-        dt_utc = dt_utc + timedelta(seconds=float(NK_DEVA_UTC_OFFSET_SEC))
+    # Опционален „традиционен“ коректор (в секунди) – добавя се към UTC преди JD
+    if utc_offset_sec:
+        dt_utc = dt_utc + timedelta(seconds=float(utc_offset_sec))
+
 
     ut_hour = dt_utc.hour + dt_utc.minute/60.0 + dt_utc.second/3600.0
     jd_ut = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)
@@ -778,9 +780,21 @@ def calculate():
 
         # Автоматично време-зона по координати (иначе Лондон може да остане 'Europe/Sofia')
         tz_str = resolve_timezone(lat, lon, tz_sent)
+        # Корекция в секунди (по избор) – отделно за двата режима
+        # ENV: NK_UTC_OFFSET_SEC_JH (standard) и NK_UTC_OFFSET_SEC_DG (devaguru)
+        def _get_env_float(name: str, default: float = 0.0) -> float:
+            try:
+                v = os.getenv(name, '')
+                return float(v) if v != '' else float(default)
+            except Exception:
+                return float(default)
 
+        utc_offset_sec = _get_env_float(
+            'NK_UTC_OFFSET_SEC_DG' if calc_type == 'devaguru' else 'NK_UTC_OFFSET_SEC_JH',
+            0.0
+        )
 
-        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
+        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str, utc_offset_sec=utc_offset_sec)
         dt_local = dt_utc.astimezone(_safe_zoneinfo(tz_str))
 
         # инфо
