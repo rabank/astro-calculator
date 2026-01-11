@@ -231,7 +231,7 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 import swisseph as swe
 
-def dt_to_jd(date_str: str, time_str: str, tz_str: str, utc_offset_sec: float = 0.0) -> Tuple[float, datetime]:
+def dt_to_jd(date_str: str, time_str: str, tz_str: str, utc_offset_sec: float = 0.0) -> tuple[float, datetime]:
     tz = _safe_zoneinfo(tz_str)
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
     dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
