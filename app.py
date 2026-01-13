@@ -64,7 +64,7 @@ AYAN_MAP = {
 # - ако имаш стария NK_AYAN_OFFSET (както сега) => ще се ползва за DG
 # - JH по подразбиране е 0.0
 NK_AYAN_OFFSET_DG = float(os.getenv("NK_AYAN_OFFSET_DG", os.getenv("NK_AYAN_OFFSET", "-0.0105913")))
-NK_AYAN_OFFSET_JH = float(os.getenv("NK_AYAN_OFFSET_JH", "-0.025"))
+NK_AYAN_OFFSET_JH = float(os.getenv("NK_AYAN_OFFSET_JH", "0.0"))
 
 
 # базов сидерален режим (без offset-a; той се добавя ръчно)
@@ -231,17 +231,15 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 import swisseph as swe
 
-def dt_to_jd(date_str: str, time_str: str, tz_str: str, utc_offset_sec: float = 0.0) -> tuple[float, datetime]:
+def dt_to_jd(date_str: str, time_str: str, tz_str: str):
     tz = _safe_zoneinfo(tz_str)
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
     dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
     dt_utc = dt_local.astimezone(timezone.utc)
 
     # (по желание) DevaGuru UTC micro-shift – ако го ползваш
-    # Опционален „традиционен“ коректор (в секунди) – добавя се към UTC преди JD
-    if utc_offset_sec:
-        dt_utc = dt_utc + timedelta(seconds=float(utc_offset_sec))
-
+    if NK_DEVA_MODE and NK_DEVA_UTC_OFFSET_SEC != 0:
+        dt_utc = dt_utc + timedelta(seconds=float(NK_DEVA_UTC_OFFSET_SEC))
 
     ut_hour = dt_utc.hour + dt_utc.minute/60.0 + dt_utc.second/3600.0
     jd_ut = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)
@@ -252,83 +250,91 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str, utc_offset_sec: float = 
 FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
-def _ayanamsha_deg_ut(jd: float, offset_deg: float) -> float:
-    swe.set_sid_mode(swe.SIDM_LAHIRI)
-    base = swe.get_ayanamsa_ut(jd)
+def _ayanamsha_deg_ut(jd: float, offset_deg: float = 0.0) -> float:
+    """Айанамша (градуси) за JD(UT) + ръчен offset.
+    НЕ сменя sidereal mode вътре – това се прави глобално с swe.set_sid_mode(...).
+    """
+    base = float(swe.get_ayanamsa_ut(jd))
     return base + float(offset_deg)
+
 
 def _sidereal_from_tropical(trop_lon: float, ayan: float) -> float:
     return (trop_lon - ayan) % 360.0
 
-def planet_longitudes(jd: float, use_sidereal: bool = True, ayan_override: float | None = None, topo: bool = False):
-    # ако е подаден ayan_override -> ползваме него (вече включва offset-а за режима)
-    ayan = float(ayan_override) if (use_sidereal and ayan_override is not None) else (
-        _ayanamsha_deg_ut(jd, NK_AYAN_OFFSET_JH) if use_sidereal else 0.0
-    )
+def planet_longitudes(
+    jd: float,
+    use_sidereal: bool = True,
+    ayan_override: float | None = None,
+    topo: bool = False
+):
+    """Връща списък от планети + Раху/Кету.
 
-    # !!! КЛЮЧОВО: ако topo=True -> добавяме FLG_TOPOCTR към изчисленията на планетите
-    flags = FLAGS_TROP | (swe.FLG_TOPOCTR if topo else 0)
+    Ключовото тук: за сидерални позиции НЕ ползваме swe.FLG_SIDEREAL, а:
+      sid = (trop - ayan) % 360
+    Така NK_AYAN_OFFSET_DG / NK_AYAN_OFFSET_JH РЕАЛНО местят ВСИЧКИ тела (секунди/минути).
 
+    - ayan_override: ако е подаден, това е айанамша (в градуси) вече с нужния offset за режима.
+    - topo: ако някога искаш топоцентрични планети (по подразбиране False).
+    """
     plist = [
-        (swe.SUN,     "Слънце"),
-        (swe.MOON,    "Луна"),
-        (swe.MERCURY, "Меркурий"),
-        (swe.VENUS,   "Венера"),
-        (swe.MARS,    "Марс"),
-        (swe.JUPITER, "Юпитер"),
-        (swe.SATURN,  "Сатурн"),
+        (swe.SUN, "Слънце"),
+        (swe.MOON,"Луна"),
+        (swe.MERCURY,"Меркурий"),
+        (swe.VENUS,"Венера"),
+        (swe.MARS,"Марс"),
+        (swe.JUPITER,"Юпитер"),
+        (swe.SATURN,"Сатурн"),
     ]
 
     out = []
+    flags = FLAGS_TROP | (swe.FLG_TOPOCTR if topo else 0)
+
+    # Айанамша за конверсията
+    ay = float(ayan_override) if (use_sidereal and ayan_override is not None) else (float(_ayanamsha_deg_ut(jd)) if use_sidereal else 0.0)
+
     for pid, name in plist:
         pos, _ = swe.calc_ut(jd, pid, flags)
         trop = pos[0] % 360.0
-        spd  = pos[3]
-        retro = spd < 0
-
-        lon  = _sidereal_from_tropical(trop, ayan) if use_sidereal else trop
-        n, p = nak_pada(lon)
-
+        L = ((trop - ay) % 360.0) if use_sidereal else trop
+        n, p = nak_pada(L)
         out.append({
             "planet": name,
-            "longitude": round(lon, 6),
-            "sign": sign_of(lon),
+            "longitude": round(L, 6),
+            "sign": sign_of(L),
             "nakshatra": n,
             "pada": p,
-            "retrograde": retro
+            "retrograde": bool(pos[3] < 0),
         })
 
-    # Раху/Кету (същите флагове!)
-    node_id = swe.TRUE_NODE if NODE == "TRUE" else swe.MEAN_NODE
-    npos, _ = swe.calc_ut(jd, node_id, flags)
-    trop_rahu = npos[0] % 360.0
+    node_id = swe.TRUE_NODE if NODE.upper() == "TRUE" else swe.MEAN_NODE
+    node_pos, _ = swe.calc_ut(jd, node_id, flags)
+    trop_rah = node_pos[0] % 360.0
+    rahu_L = ((trop_rah - ay) % 360.0) if use_sidereal else trop_rah
+    ketu_L = (rahu_L + 180.0) % 360.0
 
-    rahu = _sidereal_from_tropical(trop_rahu, ayan) if use_sidereal else trop_rahu
-    ketu = (rahu + 180.0) % 360.0
-
-    r_n, r_p = nak_pada(rahu)
-    k_n, k_p = nak_pada(ketu)
+    r_n, r_p = nak_pada(rahu_L)
+    k_n, k_p = nak_pada(ketu_L)
 
     out.append({
         "planet": "Раху",
-        "longitude": round(rahu, 6),
-        "sign": sign_of(rahu),
+        "longitude": round(rahu_L, 6),
+        "sign": sign_of(rahu_L),
         "nakshatra": r_n,
         "pada": r_p,
-        "retrograde": False
+        "retrograde": True
     })
     out.append({
         "planet": "Кету",
-        "longitude": round(ketu, 6),
-        "sign": sign_of(ketu),
+        "longitude": round(ketu_L, 6),
+        "sign": sign_of(ketu_L),
         "nakshatra": k_n,
         "pada": k_p,
-        "retrograde": False
+        "retrograde": True
     })
 
     return out
 
-    
+
 def compute_arudha_lagna(asc_sign_index, planets):
     """
     Арудха Лагна (според традицията на Шри Ачютананда / Академия Джатака)
@@ -780,21 +786,9 @@ def calculate():
 
         # Автоматично време-зона по координати (иначе Лондон може да остане 'Europe/Sofia')
         tz_str = resolve_timezone(lat, lon, tz_sent)
-        # Корекция в секунди (по избор) – отделно за двата режима
-        # ENV: NK_UTC_OFFSET_SEC_JH (standard) и NK_UTC_OFFSET_SEC_DG (devaguru)
-        def _get_env_float(name: str, default: float = 0.0) -> float:
-            try:
-                v = os.getenv(name, '')
-                return float(v) if v != '' else float(default)
-            except Exception:
-                return float(default)
 
-        utc_offset_sec = _get_env_float(
-            'NK_UTC_OFFSET_SEC_DG' if calc_type == 'devaguru' else 'NK_UTC_OFFSET_SEC_JH',
-            0.0
-        )
 
-        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str, utc_offset_sec=utc_offset_sec)
+        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
         dt_local = dt_utc.astimezone(_safe_zoneinfo(tz_str))
 
         # инфо
@@ -804,29 +798,31 @@ def calculate():
 
         # --- Лагна (Ascendant) ---
         # --- DG / JH координати ---
-        lat_use = float(lat)
-        lon_use = float(lon)
+        if calc_type == "devaguru":
+            lat_use = round(lat, 4)
+            lon_use = round(lon, 1)
+        else:
+            lat_use = lat
+            lon_use = lon
 
         # --- Лагна (Ascendant) ---
         ayan_off = NK_AYAN_OFFSET_DG if calc_type == "devaguru" else NK_AYAN_OFFSET_JH
         ayan = _ayanamsha_deg_ut(jd, ayan_off)
-        
-        house_flags = FLAGS_TROP
-        if calc_type == "standard":  # JH
-            house_flags = FLAGS_TROP | swe.FLG_TOPOCTR
+        swe.set_topo(lon_use, lat_use, 0)
 
         houses, ascmc = houses_safe(
             jd,
             lat_use,
             lon_use,
-            flags=house_flags,
+            flags=FLAGS_TROP | swe.FLG_TOPOCTR,
             hsys=HSYS
         )
 
-
         asc_trop = ascmc[0] % 360.0
         asc = _sidereal_from_tropical(asc_trop, ayan)
-        
+        # DG lagna correction (традиция deva.guru)
+        if calc_type == "devaguru":
+            asc = (asc - 0.303) % 360.0
         # Asc: тропически → сидерален с нашата айанамша+offset
         # ayan = _ayanamsha_deg_ut(jd)
         # houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=HSYS)
