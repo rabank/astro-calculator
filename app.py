@@ -42,6 +42,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EPHE_PATH = os.path.join(BASE_DIR, "ephe")  # папка "ephe" до app.py
 swe.set_ephe_path(EPHE_PATH)
 
+# Печат за проверка, че вървиш по НОВИЯ код (сменя се при всеки деплой)
+BUILD_ID = os.getenv('NK_BUILD_ID', 'dev')
+
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
@@ -673,7 +676,7 @@ def add_cors(resp):
 # ---------- HEALTH ----------
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify(ok=True), 200
+    return jsonify(ok=True, build_id=BUILD_ID), 200
 
 # ---------- DEBUG ----------
 @app.route('/debug', methods=['GET'], endpoint='nk_debug')
@@ -871,7 +874,8 @@ def calculate():
         # Базов отговор
         res = {
             "config": {
-                "ayanamsha": AYAN,
+                
+                "build_id": BUILD_ID,"ayanamsha": AYAN,
                 "node_type": NODE,
                 "ephe_path": EPHE_PATH,
                 "ayan_offset": ayan_off,
@@ -925,7 +929,7 @@ def calculate():
 # ---------- ROOT ----------
 @app.route('/')
 def home():
-    return f"Astro Calculator API is running (AYAN={AYAN}, NODE={NODE}, OFF_DG={NK_AYAN_OFFSET_DG}, OFF_JH={NK_AYAN_OFFSET_JH})"
+    return f\"Astro Calculator API is running (AYAN={AYAN}, NODE={NODE}, OFF_DG={NK_AYAN_OFFSET_DG}, OFF_JH={NK_AYAN_OFFSET_JH}), BUILD={BUILD_ID}\"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
