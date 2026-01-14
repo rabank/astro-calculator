@@ -42,8 +42,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EPHE_PATH = os.path.join(BASE_DIR, "ephe")  # папка "ephe" до app.py
 swe.set_ephe_path(EPHE_PATH)
 
-# Печат за проверка, че вървиш по НОВИЯ код (сменя се при всеки деплой)
-BUILD_ID = os.getenv('NK_BUILD_ID', 'dev')
+# Печат за версията на бекенда (за да видиш дали деплой е сменил файла)
+BUILD_STAMP = str(int(os.path.getmtime(__file__)))
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
@@ -67,7 +67,7 @@ AYAN_MAP = {
 # - ако имаш стария NK_AYAN_OFFSET (както сега) => ще се ползва за DG
 # - JH по подразбиране е 0.0
 NK_AYAN_OFFSET_DG = float(os.getenv("NK_AYAN_OFFSET_DG", os.getenv("NK_AYAN_OFFSET", "-0.0105913")))
-NK_AYAN_OFFSET_JH = float(os.getenv("NK_AYAN_OFFSET_JH", "0.0"))
+NK_AYAN_OFFSET_JH = float(os.getenv("NK_AYAN_OFFSET_JH", "-0.0247"))
 
 
 # базов сидерален режим (без offset-a; той се добавя ръчно)
@@ -253,91 +253,84 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
 FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
-def _ayanamsha_deg_ut(jd: float, offset_deg: float = 0.0) -> float:
-    """Айанамша (градуси) за JD(UT) + ръчен offset.
-    НЕ сменя sidereal mode вътре – това се прави глобално с swe.set_sid_mode(...).
-    """
-    base = float(swe.get_ayanamsa_ut(jd))
+def _ayanamsha_deg_ut(jd: float, offset_deg: float) -> float:
+    # Ползваме избрания айанамша режим (AYAN), после добавяме калибриращия offset
+    swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+    base = swe.get_ayanamsa_ut(jd)
     return base + float(offset_deg)
-
 
 def _sidereal_from_tropical(trop_lon: float, ayan: float) -> float:
     return (trop_lon - ayan) % 360.0
 
-def planet_longitudes(
-    jd: float,
-    use_sidereal: bool = True,
-    ayan_override: float | None = None,
-    topo: bool = False
-):
-    """Връща списък от планети + Раху/Кету.
+def planet_longitudes(jd: float, use_sidereal: bool = True, ayan_override: float | None = None, topo: bool = False):
+    # ако е подаден ayan_override -> ползваме него (вече включва offset-а за режима)
+    ayan = float(ayan_override) if (use_sidereal and ayan_override is not None) else (
+        _ayanamsha_deg_ut(jd, NK_AYAN_OFFSET_JH) if use_sidereal else 0.0
+    )
 
-    Ключовото тук: за сидерални позиции НЕ ползваме swe.FLG_SIDEREAL, а:
-      sid = (trop - ayan) % 360
-    Така NK_AYAN_OFFSET_DG / NK_AYAN_OFFSET_JH РЕАЛНО местят ВСИЧКИ тела (секунди/минути).
+    # !!! КЛЮЧОВО: ако topo=True -> добавяме FLG_TOPOCTR към изчисленията на планетите
+    flags = FLAGS_TROP | (swe.FLG_TOPOCTR if topo else 0)
 
-    - ayan_override: ако е подаден, това е айанамша (в градуси) вече с нужния offset за режима.
-    - topo: ако някога искаш топоцентрични планети (по подразбиране False).
-    """
     plist = [
-        (swe.SUN, "Слънце"),
-        (swe.MOON,"Луна"),
-        (swe.MERCURY,"Меркурий"),
-        (swe.VENUS,"Венера"),
-        (swe.MARS,"Марс"),
-        (swe.JUPITER,"Юпитер"),
-        (swe.SATURN,"Сатурн"),
+        (swe.SUN,     "Слънце"),
+        (swe.MOON,    "Луна"),
+        (swe.MERCURY, "Меркурий"),
+        (swe.VENUS,   "Венера"),
+        (swe.MARS,    "Марс"),
+        (swe.JUPITER, "Юпитер"),
+        (swe.SATURN,  "Сатурн"),
     ]
 
     out = []
-    flags = FLAGS_TROP | (swe.FLG_TOPOCTR if topo else 0)
-
-    # Айанамша за конверсията
-    ay = float(ayan_override) if (use_sidereal and ayan_override is not None) else (float(_ayanamsha_deg_ut(jd)) if use_sidereal else 0.0)
-
     for pid, name in plist:
         pos, _ = swe.calc_ut(jd, pid, flags)
         trop = pos[0] % 360.0
-        L = ((trop - ay) % 360.0) if use_sidereal else trop
-        n, p = nak_pada(L)
+        spd  = pos[3]
+        retro = spd < 0
+
+        lon  = _sidereal_from_tropical(trop, ayan) if use_sidereal else trop
+        n, p = nak_pada(lon)
+
         out.append({
             "planet": name,
-            "longitude": round(L, 6),
-            "sign": sign_of(L),
+            "longitude": round(lon, 6),
+            "sign": sign_of(lon),
             "nakshatra": n,
             "pada": p,
-            "retrograde": bool(pos[3] < 0),
+            "retrograde": retro
         })
 
-    node_id = swe.TRUE_NODE if NODE.upper() == "TRUE" else swe.MEAN_NODE
-    node_pos, _ = swe.calc_ut(jd, node_id, flags)
-    trop_rah = node_pos[0] % 360.0
-    rahu_L = ((trop_rah - ay) % 360.0) if use_sidereal else trop_rah
-    ketu_L = (rahu_L + 180.0) % 360.0
+    # Раху/Кету (същите флагове!)
+    node_id = swe.TRUE_NODE if NODE == "TRUE" else swe.MEAN_NODE
+    npos, _ = swe.calc_ut(jd, node_id, flags)
+    trop_rahu = npos[0] % 360.0
 
-    r_n, r_p = nak_pada(rahu_L)
-    k_n, k_p = nak_pada(ketu_L)
+    rahu = _sidereal_from_tropical(trop_rahu, ayan) if use_sidereal else trop_rahu
+    ketu = (rahu + 180.0) % 360.0
+
+    r_n, r_p = nak_pada(rahu)
+    k_n, k_p = nak_pada(ketu)
 
     out.append({
         "planet": "Раху",
-        "longitude": round(rahu_L, 6),
-        "sign": sign_of(rahu_L),
+        "longitude": round(rahu, 6),
+        "sign": sign_of(rahu),
         "nakshatra": r_n,
         "pada": r_p,
-        "retrograde": True
+        "retrograde": False
     })
     out.append({
         "planet": "Кету",
-        "longitude": round(ketu_L, 6),
-        "sign": sign_of(ketu_L),
+        "longitude": round(ketu, 6),
+        "sign": sign_of(ketu),
         "nakshatra": k_n,
         "pada": k_p,
-        "retrograde": True
+        "retrograde": False
     })
 
     return out
 
-
+    
 def compute_arudha_lagna(asc_sign_index, planets):
     """
     Арудха Лагна (според традицията на Шри Ачютананда / Академия Джатака)
@@ -676,7 +669,7 @@ def add_cors(resp):
 # ---------- HEALTH ----------
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify(ok=True, build_id=BUILD_ID), 200
+    return jsonify(ok=True), 200
 
 # ---------- DEBUG ----------
 @app.route('/debug', methods=['GET'], endpoint='nk_debug')
@@ -810,22 +803,22 @@ def calculate():
 
         # --- Лагна (Ascendant) ---
         ayan_off = NK_AYAN_OFFSET_DG if calc_type == "devaguru" else NK_AYAN_OFFSET_JH
-        ayan = _ayanamsha_deg_ut(jd, ayan_off)
-        swe.set_topo(lon_use, lat_use, 0)
+        # базова айанамша от Swiss Ephemeris (според AYAN)
+        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+        ayan_base = swe.get_ayanamsa_ut(jd)
+        # реалната айанамша, която ползваме (base + offset)
+        ayan = float(ayan_base) + float(ayan_off)
 
         houses, ascmc = houses_safe(
             jd,
             lat_use,
             lon_use,
-            flags=FLAGS_TROP | swe.FLG_TOPOCTR,
+            flags=FLAGS_TROP,
             hsys=HSYS
         )
 
         asc_trop = ascmc[0] % 360.0
         asc = _sidereal_from_tropical(asc_trop, ayan)
-        # DG lagna correction (традиция deva.guru)
-        if calc_type == "devaguru":
-            asc = (asc - 0.303) % 360.0
         # Asc: тропически → сидерален с нашата айанамша+offset
         # ayan = _ayanamsha_deg_ut(jd)
         # houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=HSYS)
@@ -874,11 +867,13 @@ def calculate():
         # Базов отговор
         res = {
             "config": {
-                
-                "build_id": BUILD_ID,"ayanamsha": AYAN,
+                "ayanamsha": AYAN,
                 "node_type": NODE,
                 "ephe_path": EPHE_PATH,
-                "ayan_offset": ayan_off,
+                "build": BUILD_STAMP,
+                "ayan_base": float(ayan_base),
+                "ayan_used": float(ayan),
+                "ayan_offset": float(ayan_off),
                 "tz_sent": tz_sent,
                 "tz_used": tz_str
             },
@@ -929,7 +924,7 @@ def calculate():
 # ---------- ROOT ----------
 @app.route('/')
 def home():
-    return f\"Astro Calculator API is running (AYAN={AYAN}, NODE={NODE}, OFF_DG={NK_AYAN_OFFSET_DG}, OFF_JH={NK_AYAN_OFFSET_JH}), BUILD={BUILD_ID}\"
+    return f"Astro Calculator API is running (AYAN={AYAN}, NODE={NODE}, OFF_DG={NK_AYAN_OFFSET_DG}, OFF_JH={NK_AYAN_OFFSET_JH})"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
