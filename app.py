@@ -250,7 +250,7 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
     return jd_ut, dt_utc
 
 # ---- Флагове ----
-FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
+FLAGS_TROP = swe.FLG_SWIEPH
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
 def _ayanamsha_deg_ut(jd: float, offset_deg: float) -> float:
