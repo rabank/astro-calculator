@@ -250,7 +250,7 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
     return jd_ut, dt_utc
 
 # ---- Флагове ----
-FLAGS_TROP = swe.FLG_SWIEPH
+FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_TOPOCTR
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
 def _ayanamsha_deg_ut(jd: float, offset_deg: float) -> float:
@@ -804,7 +804,7 @@ def calculate():
         ayan_base = swe.get_ayanamsa_ut(jd)
         # реалната айанамша, която ползваме (base + offset)
         ayan = float(ayan_base) + float(ayan_off)
-
+        swe.set_topo(lon_use, lat_use, 0)
         houses, ascmc = houses_safe(
             jd,
             lat_use,
