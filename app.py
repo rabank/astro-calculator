@@ -252,7 +252,6 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
 # ---- Флагове ----
 FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_TOPOCTR
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
-FLAGS_HOUSES = swe.FLG_SWIEPH
 
 def _ayanamsha_deg_ut(jd: float, offset_deg: float) -> float:
     # Ползваме избрания айанамша режим (AYAN), после добавяме калибриращия offset
@@ -810,7 +809,7 @@ def calculate():
             jd,
             lat_use,
             lon_use,
-            flags=FLAGS_HOUSES,
+            flags=FLAGS_TROP,
             hsys=HSYS
         )
 
@@ -818,7 +817,7 @@ def calculate():
         asc = _sidereal_from_tropical(asc_trop, ayan)
         # Asc: тропически → сидерален с нашата айанамша+offset
         # ayan = _ayanamsha_deg_ut(jd)
-        # houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_HOUSES, hsys=HSYS)
+        # houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=HSYS)
         # asc_trop = ascmc[0] % 360.0
         # asc = _sidereal_from_tropical(asc_trop, ayan)
 
