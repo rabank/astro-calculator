@@ -254,9 +254,15 @@ FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
 def _ayanamsha_deg_ut(jd: float, offset_deg: float) -> float:
-    # Ползваме избрания айанамша режим (AYAN), после добавяме калибриращия offset
-    swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
-    base = swe.get_ayanamsa_ut(jd)
+    # True Chitra Paksha: изчисляваме от реалната позиция на Спика
+    # Спика (алфа Дева) е фиксирана на 180° (0° Везни) в сидералния зодиак
+    try:
+        spica, _ = swe.fixstar_ut("Spica", jd, swe.FLG_SWIEPH)
+        base = (spica[0] - 180.0) % 360.0
+    except Exception:
+        # fallback към стандартен Lahiri ако Spica не се намери
+        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+        base = swe.get_ayanamsa_ut(jd)
     return base + float(offset_deg)
 
 def _sidereal_from_tropical(trop_lon: float, ayan: float) -> float:
