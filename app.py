@@ -794,12 +794,8 @@ def calculate():
 
         # --- Лагна (Ascendant) ---
         # --- DG / JH координати ---
-        if calc_type == "devaguru":
-            lat_use = round(lat, 4)
-            lon_use = round(lon, 1)
-        else:
-            lat_use = lat
-            lon_use = lon
+        lat_use = lat
+        lon_use = lon
 
         # --- Лагна (Ascendant) ---
         ayan_off = NK_AYAN_OFFSET_DG if calc_type == "devaguru" else NK_AYAN_OFFSET_JH
