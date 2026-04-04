@@ -716,7 +716,7 @@ def debug():
             ]:
                 pos, _ = swe.calc_ut(jd, pid, FLAGS_TROP)
                 trop = pos[0] % 360.0
-                ay = _ayanamsha_deg_ut(jd)
+                ay = _ayanamsha_deg_ut(jd, NK_AYAN_OFFSET_JH)
                 L = _sidereal_from_tropical(trop, ay)
                 n, p = nak_pada(L)
                 res["Planets"].append({
@@ -730,7 +730,7 @@ def debug():
             node_id = swe.TRUE_NODE if node_is_true else swe.MEAN_NODE
             node_pos, _ = swe.calc_ut(jd, node_id, FLAGS_TROP)
             trop_rah = node_pos[0] % 360.0
-            ay = _ayanamsha_deg_ut(jd)
+            ay = _ayanamsha_deg_ut(jd, NK_AYAN_OFFSET_JH)
             rahu_L = _sidereal_from_tropical(trop_rah, ay)
             ketu_L = (rahu_L + 180.0) % 360.0
             r_n, r_p = nak_pada(rahu_L)
@@ -759,11 +759,25 @@ def debug():
 
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
 
+        # Тест на Spica
+        spica_test = {}
+        try:
+            jd_test = swe.julday(2026, 3, 30, 9.2033)
+            result = swe.fixstar_ut("Spica", jd_test, swe.FLG_SWIEPH)
+            spica_test = {
+                "spica_lon": result[0][0],
+                "true_citra_ayan": (result[0][0] - 180.0) % 360.0,
+                "lahiri_ayan": swe.get_ayanamsa_ut(jd_test)
+            }
+        except Exception as ex:
+            spica_test = {"error": str(ex)}
+
         return jsonify({
             "ok": True,
             "ayan_offset_dg": NK_AYAN_OFFSET_DG,
             "ayan_offset_jh": NK_AYAN_OFFSET_JH,
-            "sidereal_variants": variants
+            "sidereal_variants": variants,
+            "spica_test": spica_test
         }), 200
 
     except Exception as e:
