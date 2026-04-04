@@ -66,8 +66,8 @@ AYAN_MAP = {
 # Backward compatible:
 # - ако имаш стария NK_AYAN_OFFSET (както сега) => ще се ползва за DG
 # - JH по подразбиране е 0.0
-NK_AYAN_OFFSET_DG = float(os.getenv("NK_AYAN_OFFSET_DG", os.getenv("NK_AYAN_OFFSET", "-0.0105913")))
-NK_AYAN_OFFSET_JH = float(os.getenv("NK_AYAN_OFFSET_JH", "-0.0247"))
+NK_AYAN_OFFSET_DG = float(os.getenv("NK_AYAN_OFFSET_DG", "0.0"))
+NK_AYAN_OFFSET_JH = float(os.getenv("NK_AYAN_OFFSET_JH", "0.0"))
 
 
 # базов сидерален режим (без offset-a; той се добавя ръчно)
@@ -254,13 +254,12 @@ FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
 def _ayanamsha_deg_ut(jd: float, offset_deg: float) -> float:
-    # True Chitra Paksha: изчисляваме от реалната позиция на Спика
-    # Спика (алфа Дева) е фиксирана на 180° (0° Везни) в сидералния зодиак
+    # True Chitra Paksha: Спика фиксирана на 180° (0° Везни)
     try:
-        spica, _ = swe.fixstar_ut("Spica", jd, swe.FLG_SWIEPH)
-        base = (spica[0] - 180.0) % 360.0
+        result = swe.fixstar_ut("Spica", jd, swe.FLG_SWIEPH)
+        spica_lon = result[0][0]
+        base = (spica_lon - 180.0) % 360.0
     except Exception:
-        # fallback към стандартен Lahiri ако Spica не се намери
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
         base = swe.get_ayanamsa_ut(jd)
     return base + float(offset_deg)
