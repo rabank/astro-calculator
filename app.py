@@ -54,7 +54,7 @@ AYAN = os.getenv("AYANAMSHA", "LAHIRI").upper()   # LAHIRI | RAMAN | KP
 NODE = os.getenv("NODE_TYPE", "MEAN").upper()     # TRUE | MEAN
 
 AYAN_MAP = {
-    "LAHIRI": swe.SIDM_LAHIRI,          # Chitrapaksha
+    "LAHIRI": swe.SIDM_TRUE_CITRA,      # True Chitrapaksha (Spica fixed)
     "RAMAN":  swe.SIDM_RAMAN,
     "KP":     swe.SIDM_KRISHNAMURTI
 }
@@ -71,7 +71,7 @@ NK_AYAN_OFFSET_JH = float(os.getenv("NK_AYAN_OFFSET_JH", "-0.0247"))
 
 
 # базов сидерален режим (без offset-a; той се добавя ръчно)
-swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_TRUE_CITRA))
 
 # === DevaGuru compatibility mode ===
 NK_DEVA_MODE = os.getenv("NK_DEVA_MODE", "0") == "1"
@@ -255,7 +255,7 @@ FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
 def _ayanamsha_deg_ut(jd: float, offset_deg: float) -> float:
     # Ползваме избрания айанамша режим (AYAN), после добавяме калибриращия offset
-    swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+    swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_TRUE_CITRA))
     base = swe.get_ayanamsa_ut(jd)
     return base + float(offset_deg)
 
@@ -749,10 +749,10 @@ def debug():
             return res
 
         variants = [
-            compute_variant("LAHIRI_MEAN+OFF", swe.SIDM_LAHIRI, False),
+            compute_variant("LAHIRI_MEAN+OFF", swe.SIDM_TRUE_CITRA, False),
         ]
 
-        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_TRUE_CITRA))
 
         return jsonify({
             "ok": True,
@@ -788,19 +788,23 @@ def calculate():
         dt_local = dt_utc.astimezone(_safe_zoneinfo(tz_str))
 
         # инфо
-        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_TRUE_CITRA))
 
         # Asc: тропически → сидерален с нашата айанамша+offset
 
         # --- Лагна (Ascendant) ---
         # --- DG / JH координати ---
-        lat_use = lat
-        lon_use = lon
+        if calc_type == "devaguru":
+            lat_use = round(lat, 4)
+            lon_use = round(lon, 1)
+        else:
+            lat_use = lat
+            lon_use = lon
 
         # --- Лагна (Ascendant) ---
         ayan_off = NK_AYAN_OFFSET_DG if calc_type == "devaguru" else NK_AYAN_OFFSET_JH
         # базова айанамша от Swiss Ephemeris (според AYAN)
-        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
+        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_TRUE_CITRA))
         ayan_base = swe.get_ayanamsa_ut(jd)
         # реалната айанамша, която ползваме (base + offset)
         ayan = float(ayan_base) + float(ayan_off)
