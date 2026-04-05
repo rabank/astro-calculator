@@ -66,8 +66,8 @@ AYAN_MAP = {
 # Backward compatible:
 # - ако имаш стария NK_AYAN_OFFSET (както сега) => ще се ползва за DG
 # - JH по подразбиране е 0.0
-NK_AYAN_OFFSET_DG = float(os.getenv("NK_AYAN_OFFSET_DG", "0.0"))
-NK_AYAN_OFFSET_JH = float(os.getenv("NK_AYAN_OFFSET_JH", "0.0"))
+NK_AYAN_OFFSET_DG = float(os.getenv("NK_AYAN_OFFSET_DG", os.getenv("NK_AYAN_OFFSET", "-0.0105913")))
+NK_AYAN_OFFSET_JH = float(os.getenv("NK_AYAN_OFFSET_JH", "-0.0247"))
 
 
 # базов сидерален режим (без offset-a; той се добавя ръчно)
@@ -253,15 +253,17 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str):
 FLAGS_TROP = swe.FLG_SWIEPH | swe.FLG_SPEED
 FLAGS_SID  = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
 
-def _ayanamsha_deg_ut(jd: float, offset_deg: float) -> float:
-    # True Chitra Paksha: Спика фиксирана на 180° (0° Везни)
+def _ayanamsha_deg_ut(jd: float, offset_deg: float = 0.0) -> float:
+    # True Chitrapaksha: Спика фиксирана на 180° (тропически)
+    # ВАЖНО: нулираме sid_mode за да получим тропическа позиция на Спика
     try:
+        swe.set_sid_mode(0)  # нулираме към tropical
         result = swe.fixstar_ut("Spica", jd, swe.FLG_SWIEPH)
-        spica_lon = result[0][0]
-        base = (spica_lon - 180.0) % 360.0
+        base = (result[0][0] - 180.0) % 360.0
     except Exception:
-        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
         base = swe.get_ayanamsa_ut(jd)
+    finally:
+        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
     return base + float(offset_deg)
 
 def _sidereal_from_tropical(trop_lon: float, ayan: float) -> float:
@@ -716,7 +718,7 @@ def debug():
             ]:
                 pos, _ = swe.calc_ut(jd, pid, FLAGS_TROP)
                 trop = pos[0] % 360.0
-                ay = _ayanamsha_deg_ut(jd, NK_AYAN_OFFSET_JH)
+                ay = _ayanamsha_deg_ut(jd)
                 L = _sidereal_from_tropical(trop, ay)
                 n, p = nak_pada(L)
                 res["Planets"].append({
@@ -730,7 +732,7 @@ def debug():
             node_id = swe.TRUE_NODE if node_is_true else swe.MEAN_NODE
             node_pos, _ = swe.calc_ut(jd, node_id, FLAGS_TROP)
             trop_rah = node_pos[0] % 360.0
-            ay = _ayanamsha_deg_ut(jd, NK_AYAN_OFFSET_JH)
+            ay = _ayanamsha_deg_ut(jd)
             rahu_L = _sidereal_from_tropical(trop_rah, ay)
             ketu_L = (rahu_L + 180.0) % 360.0
             r_n, r_p = nak_pada(rahu_L)
@@ -759,25 +761,11 @@ def debug():
 
         swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
 
-        # Тест на Spica
-        spica_test = {}
-        try:
-            jd_test = swe.julday(2026, 3, 30, 9.2033)
-            result = swe.fixstar_ut("Spica", jd_test, swe.FLG_SWIEPH)
-            spica_test = {
-                "spica_lon": result[0][0],
-                "true_citra_ayan": (result[0][0] - 180.0) % 360.0,
-                "lahiri_ayan": swe.get_ayanamsa_ut(jd_test)
-            }
-        except Exception as ex:
-            spica_test = {"error": str(ex)}
-
         return jsonify({
             "ok": True,
             "ayan_offset_dg": NK_AYAN_OFFSET_DG,
             "ayan_offset_jh": NK_AYAN_OFFSET_JH,
-            "sidereal_variants": variants,
-            "spica_test": spica_test
+            "sidereal_variants": variants
         }), 200
 
     except Exception as e:
@@ -818,11 +806,8 @@ def calculate():
 
         # --- Лагна (Ascendant) ---
         ayan_off = NK_AYAN_OFFSET_DG if calc_type == "devaguru" else NK_AYAN_OFFSET_JH
-        # базова айанамша от Swiss Ephemeris (според AYAN)
-        swe.set_sid_mode(AYAN_MAP.get(AYAN, swe.SIDM_LAHIRI))
-        ayan_base = swe.get_ayanamsa_ut(jd)
-        # реалната айанамша, която ползваме (base + offset)
-        ayan = float(ayan_base) + float(ayan_off)
+        ayan = _ayanamsha_deg_ut(jd, ayan_off)
+        ayan_base = ayan - float(ayan_off)
 
         houses, ascmc = houses_safe(
             jd,
