@@ -234,10 +234,20 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 import swisseph as swe
 
-def dt_to_jd(date_str: str, time_str: str, tz_str: str):
-    tz = _safe_zoneinfo(tz_str)
+def dt_to_jd(date_str: str, time_str: str, tz_str: str, lon: float = 0.0):
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
-    dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
+    year = int(date_str.split("-")[0])
+
+    # LMT за дати преди 1900г. — игнорираме таймзоната, ползваме longitude
+    if year < 1900:
+        lmt_offset_hours = lon / 15.0
+        lmt_offset_sec = round(lmt_offset_hours * 3600)
+        tz_lmt = timezone(timedelta(seconds=lmt_offset_sec))
+        dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz_lmt)
+    else:
+        tz = _safe_zoneinfo(tz_str)
+        dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
+
     dt_utc = dt_local.astimezone(timezone.utc)
 
     # (по желание) DevaGuru UTC micro-shift – ако го ползваш
@@ -791,7 +801,7 @@ def calculate():
         tz_str = resolve_timezone(lat, lon, tz_sent)
 
 
-        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
+        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str, lon)
         dt_local = dt_utc.astimezone(_safe_zoneinfo(tz_str))
 
         # инфо
@@ -875,7 +885,8 @@ def calculate():
                 "ayan_used": float(ayan),
                 "ayan_offset": float(ayan_off),
                 "tz_sent": tz_sent,
-                "tz_used": tz_str
+                "tz_used": tz_str,
+                "lmt_used": int(date_str.split("-")[0]) < 1900
             },
             "Ascendant": {
                 "degree": round(asc, 6),
