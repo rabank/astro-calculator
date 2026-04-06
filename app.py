@@ -636,19 +636,15 @@ def vimsottari_generate(birth_dt_utc: datetime, moon_lon_sid: float, horizon_yea
 
 def houses_safe(jd, lat, lon, flags=None, hsys=b'P'):
     """
-    Унифициран достъп до houses_ex / houses за различни версии на pyswisseph.
+    Унифициран достъп до houses_ex / houses.
+    houses_ex не ползва flags за Лагна — Лагна е чисто геометрична.
     """
     try:
-        if flags is not None:
-            return swe.houses_ex(jd, flags, lat, lon, hsys)
-        else:
-            return swe.houses_ex(jd, lat, lon, hsys)
-    except TypeError:
-        try:
-            return swe.houses_ex(jd, lat, lon, hsys)
-        except Exception:
-            cusps, ascmc = swe.houses(jd, lat, lon, hsys)
-            return (cusps, ascmc)
+        cusps, ascmc = swe.houses_ex(jd, lat, lon, hsys)
+        return (cusps, ascmc)
+    except Exception:
+        cusps, ascmc = swe.houses(jd, lat, lon, hsys)
+        return (cusps, ascmc)
 def deg_in_sign(lon: float) -> float:
     return lon % 30.0
 
@@ -718,7 +714,31 @@ def test_palmas():
         deg  = int(asc_sid % 30)
         mins = int((asc_sid % 30 - deg) * 60)
         secs = int(((asc_sid % 30 - deg) * 60 - mins) * 60)
-        return jsonify({"dt_utc": str(dt_utc), "jd": jd, "spica_trop": spica_lon, "ayan_base": ayan_base, "ayan_dg": ayan_dg, "asc_trop": asc_trop, "asc_sid": asc_sid, "asc_formatted": f"{deg}°{mins}'{secs}\"", "tz_offset_sec": int(dt_local.utcoffset().total_seconds())}), 200
+        # Тест с различни house системи
+        systems = {
+            "P": b"P",  # Placidus
+            "K": b"K",  # Koch
+            "O": b"O",  # Porphyry
+            "R": b"R",  # Regiomontanus
+            "C": b"C",  # Campanus
+            "E": b"E",  # Equal
+            "W": b"W",  # Whole sign
+            "B": b"B",  # Alcabitus
+        }
+        results = {}
+        for name, hsys in systems.items():
+            try:
+                h, a = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=hsys)
+                t = a[0] % 360.0
+                s = (t - ayan_dg) % 360.0
+                d = int(s % 30)
+                m = int((s % 30 - d) * 60)
+                sc = int(((s % 30 - d) * 60 - m) * 60)
+                results[name] = {"trop": round(t,4), "sid": round(s,4), "fmt": f"{d}°{m}\'{sc}\""}
+            except Exception as ex:
+                results[name] = {"error": str(ex)}
+
+        return jsonify({"jd": jd, "ayan_dg": ayan_dg, "tz_offset_sec": int(dt_local.utcoffset().total_seconds()), "house_systems": results}), 200
     except Exception as e:
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
