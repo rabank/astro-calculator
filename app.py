@@ -887,7 +887,9 @@ def calculate():
                 "ayan_used": float(ayan),
                 "ayan_offset": float(ayan_off),
                 "tz_sent": tz_sent,
-                "tz_used": tz_str
+                "tz_used": tz_str,
+                "tz_offset_sec": int(dt_utc.utcoffset().total_seconds()) if dt_utc.utcoffset() else 0,
+                "dt_utc": dt_utc.isoformat()
             },
             "Ascendant": {
                 "degree": round(asc, 6),
