@@ -690,6 +690,38 @@ def add_cors(resp):
 def health():
     return jsonify(ok=True), 200
 
+# ---------- TEST ПАЛМАС 1911 ----------
+@app.route("/test-palmas", methods=["GET"])
+def test_palmas():
+    try:
+        import pytz
+        date_str = "1911-12-12"
+        time_str = "12:12:12"
+        tz_str   = "America/Araguaina"
+        lat      = -10.1675
+        lon      = -48.3277
+        from datetime import datetime
+        dt_naive = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")
+        tz_pytz  = pytz.timezone(tz_str)
+        dt_local = tz_pytz.localize(dt_naive, is_dst=None)
+        dt_utc   = dt_local.astimezone(timezone.utc)
+        ut_hour  = dt_utc.hour + dt_utc.minute/60.0 + dt_utc.second/3600.0
+        jd = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)
+        swe.set_sid_mode(0)
+        spica = swe.fixstar_ut("Spica", jd, swe.FLG_SWIEPH)
+        spica_lon = spica[0][0]
+        ayan_base = (spica_lon - 180.0) % 360.0
+        ayan_dg = ayan_base + float(os.getenv("NK_AYAN_OFFSET_DG", "0.0028959"))
+        houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=b'P')
+        asc_trop = ascmc[0] % 360.0
+        asc_sid  = (asc_trop - ayan_dg) % 360.0
+        deg  = int(asc_sid % 30)
+        mins = int((asc_sid % 30 - deg) * 60)
+        secs = int(((asc_sid % 30 - deg) * 60 - mins) * 60)
+        return jsonify({"dt_utc": str(dt_utc), "jd": jd, "spica_trop": spica_lon, "ayan_base": ayan_base, "ayan_dg": ayan_dg, "asc_trop": asc_trop, "asc_sid": asc_sid, "asc_formatted": f"{deg}°{mins}'{secs}\"", "tz_offset_sec": int(dt_local.utcoffset().total_seconds())}), 200
+    except Exception as e:
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+
 # ---------- DEBUG ----------
 @app.route('/debug', methods=['GET'], endpoint='nk_debug')
 def debug():
