@@ -234,21 +234,25 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 import swisseph as swe
 
-def dt_to_jd(date_str: str, time_str: str, tz_str: str):
+def dt_to_jd(date_str: str, time_str: str, tz_str: str, lon: float = 0.0, use_lmt: bool = False):
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
     dt_naive = datetime.strptime(f"{date_str} {time_str}", fmt)
 
-    # pytz съдържа пълна историческа IANA база — знае кога всяка таймзона
-    # е ползвала LMT и кога е преминала към стандартно време.
-    # Например America/Araguaina за 1911г. автоматично връща LMT -03:13.
-    try:
-        import pytz
-        tz_pytz = pytz.timezone(tz_str)
-        dt_local = tz_pytz.localize(dt_naive, is_dst=None)
-    except Exception:
-        # fallback към zoneinfo ако pytz не е налична или tz_str е невалидна
-        tz = _safe_zoneinfo(tz_str)
-        dt_local = dt_naive.replace(tzinfo=tz)
+    if use_lmt:
+        # Ръчен LMT — изчисляваме offset директно от longitude
+        lmt_offset_sec = round((lon / 15.0) * 3600)
+        tz_lmt = timezone(timedelta(seconds=lmt_offset_sec))
+        dt_local = dt_naive.replace(tzinfo=tz_lmt)
+    else:
+        # pytz съдържа пълна историческа IANA база — знае кога всяка таймзона
+        # е ползвала LMT и кога е преминала към стандартно време.
+        try:
+            import pytz
+            tz_pytz = pytz.timezone(tz_str)
+            dt_local = tz_pytz.localize(dt_naive, is_dst=None)
+        except Exception:
+            tz = _safe_zoneinfo(tz_str)
+            dt_local = dt_naive.replace(tzinfo=tz)
 
     dt_utc = dt_local.astimezone(timezone.utc)
 
@@ -855,7 +859,8 @@ def calculate():
         tz_str = resolve_timezone(lat, lon, tz_sent)
 
 
-        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
+        use_lmt = bool(data.get('use_lmt', False))
+        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str, lon=lon, use_lmt=use_lmt)
         dt_local = dt_utc.astimezone(_safe_zoneinfo(tz_str))
 
         # инфо
