@@ -239,8 +239,7 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str, lon: float = 0.0, use_lm
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
     dt_naive = datetime.strptime(f"{date_str} {time_str}", fmt)
 
-    year = dt_naive.year
-    if use_lmt or year < 1920:
+    if use_lmt:
         # LMT — изчисляваме offset директно от longitude
         lmt_offset_sec = round((lon / 15.0) * 3600)
         tz_lmt = timezone(timedelta(seconds=lmt_offset_sec))
@@ -250,12 +249,16 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str, lon: float = 0.0, use_lm
         try:
             import pytz
             tz_pytz = pytz.timezone(tz_str)
-            dt_local = tz_pytz.localize(dt_naive, is_dst=None)
+            try:
+                dt_local = tz_pytz.localize(dt_naive, is_dst=None)
+            except pytz.exceptions.AmbiguousTimeError:
+                dt_local = tz_pytz.localize(dt_naive, is_dst=False)
+            except pytz.exceptions.NonExistentTimeError:
+                dt_local = tz_pytz.localize(dt_naive, is_dst=True)
         except Exception:
-            # fallback: LMT от longitude
-            lmt_offset_sec = round((lon / 15.0) * 3600)
-            tz_lmt = timezone(timedelta(seconds=lmt_offset_sec))
-            dt_local = dt_naive.replace(tzinfo=tz_lmt)
+            # fallback: zoneinfo
+            tz = _safe_zoneinfo(tz_str)
+            dt_local = dt_naive.replace(tzinfo=tz)
 
     dt_utc = dt_local.astimezone(timezone.utc)
 
