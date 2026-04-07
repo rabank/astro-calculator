@@ -250,7 +250,7 @@ def dt_to_jd(date_str: str, time_str: str, tz_str: str, lon: float = 0.0, use_lm
         try:
             import pytz
             tz_pytz = pytz.timezone(tz_str)
-            dt_local = tz_pytz.localize(dt_naive, is_dst=False)
+            dt_local = tz_pytz.localize(dt_naive, is_dst=None)
         except Exception:
             # fallback: LMT от longitude
             lmt_offset_sec = round((lon / 15.0) * 3600)
