@@ -22,11 +22,8 @@ def _safe_zoneinfo(tz_name: str):
         return timezone.utc
 
 def resolve_timezone(lat: float, lon: float, tz_sent: str | None = None) -> str:
-    """Prefer timezone from coordinates; fall back to tz_sent; then UTC."""
-    tz_sent = (tz_sent or '').strip()
-    # If tz_sent is not an IANA name (e.g. 'GMT+3'), we ignore it.
-    if tz_sent and ('/' not in tz_sent):
-        tz_sent = ''
+    """Always prefer timezone from coordinates (timezonefinder); ignore UTC/empty from frontend."""
+    # Always use timezonefinder first — frontend tzFromLatLon may be blocked by CORS
     if _TZF is not None:
         try:
             tz = _TZF.timezone_at(lat=lat, lng=lon) or _TZF.closest_timezone_at(lat=lat, lng=lon)
@@ -34,7 +31,11 @@ def resolve_timezone(lat: float, lon: float, tz_sent: str | None = None) -> str:
                 return tz
         except Exception:
             pass
-    return tz_sent or 'UTC'
+    # fallback to tz_sent only if it's a valid IANA name
+    tz_sent = (tz_sent or '').strip()
+    if tz_sent and '/' in tz_sent and tz_sent != 'UTC':
+        return tz_sent
+    return 'UTC'
 
 
 # ---- Swiss Ephemeris: път до ефемеридите ----
@@ -234,10 +235,28 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 import swisseph as swe
 
-def dt_to_jd(date_str: str, time_str: str, tz_str: str):
-    tz = _safe_zoneinfo(tz_str)
+def dt_to_jd(date_str: str, time_str: str, tz_str: str, lon: float = 0.0, use_lmt: bool = False):
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
-    dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
+    dt_naive = datetime.strptime(f"{date_str} {time_str}", fmt)
+
+    year = dt_naive.year
+    if use_lmt or year < 1920:
+        # LMT — изчисляваме offset директно от longitude
+        lmt_offset_sec = round((lon / 15.0) * 3600)
+        tz_lmt = timezone(timedelta(seconds=lmt_offset_sec))
+        dt_local = dt_naive.replace(tzinfo=tz_lmt)
+    else:
+        # pytz съдържа пълна историческа IANA база
+        try:
+            import pytz
+            tz_pytz = pytz.timezone(tz_str)
+            dt_local = tz_pytz.localize(dt_naive, is_dst=False)
+        except Exception:
+            # fallback: LMT от longitude
+            lmt_offset_sec = round((lon / 15.0) * 3600)
+            tz_lmt = timezone(timedelta(seconds=lmt_offset_sec))
+            dt_local = dt_naive.replace(tzinfo=tz_lmt)
+
     dt_utc = dt_local.astimezone(timezone.utc)
 
     # (по желание) DevaGuru UTC micro-shift – ако го ползваш
@@ -624,19 +643,15 @@ def vimsottari_generate(birth_dt_utc: datetime, moon_lon_sid: float, horizon_yea
 
 def houses_safe(jd, lat, lon, flags=None, hsys=b'P'):
     """
-    Унифициран достъп до houses_ex / houses за различни версии на pyswisseph.
+    Унифициран достъп до houses_ex / houses.
+    houses_ex не ползва flags за Лагна — Лагна е чисто геометрична.
     """
     try:
-        if flags is not None:
-            return swe.houses_ex(jd, flags, lat, lon, hsys)
-        else:
-            return swe.houses_ex(jd, lat, lon, hsys)
-    except TypeError:
-        try:
-            return swe.houses_ex(jd, lat, lon, hsys)
-        except Exception:
-            cusps, ascmc = swe.houses(jd, lat, lon, hsys)
-            return (cusps, ascmc)
+        cusps, ascmc = swe.houses_ex(jd, lat, lon, hsys)
+        return (cusps, ascmc)
+    except Exception:
+        cusps, ascmc = swe.houses(jd, lat, lon, hsys)
+        return (cusps, ascmc)
 def deg_in_sign(lon: float) -> float:
     return lon % 30.0
 
@@ -677,6 +692,62 @@ def add_cors(resp):
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify(ok=True), 200
+
+# ---------- TEST ПАЛМАС 1911 ----------
+@app.route("/test-palmas", methods=["GET"])
+def test_palmas():
+    try:
+        import pytz
+        date_str = "1911-12-12"
+        time_str = "12:12:12"
+        tz_str   = "America/Araguaina"
+        lat      = -10.1675
+        lon      = -48.3277
+        from datetime import datetime
+        dt_naive = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")
+        tz_pytz  = pytz.timezone(tz_str)
+        dt_local = tz_pytz.localize(dt_naive, is_dst=None)
+        dt_utc   = dt_local.astimezone(timezone.utc)
+        ut_hour  = dt_utc.hour + dt_utc.minute/60.0 + dt_utc.second/3600.0
+        jd = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)
+        swe.set_sid_mode(0)
+        spica = swe.fixstar_ut("Spica", jd, swe.FLG_SWIEPH)
+        spica_lon = spica[0][0]
+        ayan_base = (spica_lon - 180.0) % 360.0
+        ayan_dg = ayan_base + float(os.getenv("NK_AYAN_OFFSET_DG", "0.0028959"))
+        houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=b'P')
+        asc_trop = ascmc[0] % 360.0
+        asc_sid  = (asc_trop - ayan_dg) % 360.0
+        deg  = int(asc_sid % 30)
+        mins = int((asc_sid % 30 - deg) * 60)
+        secs = int(((asc_sid % 30 - deg) * 60 - mins) * 60)
+        # Тест с различни house системи
+        systems = {
+            "P": b"P",  # Placidus
+            "K": b"K",  # Koch
+            "O": b"O",  # Porphyry
+            "R": b"R",  # Regiomontanus
+            "C": b"C",  # Campanus
+            "E": b"E",  # Equal
+            "W": b"W",  # Whole sign
+            "B": b"B",  # Alcabitus
+        }
+        results = {}
+        for name, hsys in systems.items():
+            try:
+                h, a = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=hsys)
+                t = a[0] % 360.0
+                s = (t - ayan_dg) % 360.0
+                d = int(s % 30)
+                m = int((s % 30 - d) * 60)
+                sc = int(((s % 30 - d) * 60 - m) * 60)
+                results[name] = {"trop": round(t,4), "sid": round(s,4), "fmt": f"{d}°{m}\'{sc}\""}
+            except Exception as ex:
+                results[name] = {"error": str(ex)}
+
+        return jsonify({"jd": jd, "ayan_dg": ayan_dg, "tz_offset_sec": int(dt_local.utcoffset().total_seconds()), "house_systems": results}), 200
+    except Exception as e:
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
 # ---------- DEBUG ----------
 @app.route('/debug', methods=['GET'], endpoint='nk_debug')
@@ -791,7 +862,8 @@ def calculate():
         tz_str = resolve_timezone(lat, lon, tz_sent)
 
 
-        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
+        use_lmt = bool(data.get('use_lmt', False))
+        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str, lon=lon, use_lmt=use_lmt)
         dt_local = dt_utc.astimezone(_safe_zoneinfo(tz_str))
 
         # инфо
@@ -875,7 +947,9 @@ def calculate():
                 "ayan_used": float(ayan),
                 "ayan_offset": float(ayan_off),
                 "tz_sent": tz_sent,
-                "tz_used": tz_str
+                "tz_used": tz_str,
+                "tz_offset_sec": int(dt_utc.utcoffset().total_seconds()) if dt_utc.utcoffset() else 0,
+                "dt_utc": dt_utc.isoformat()
             },
             "Ascendant": {
                 "degree": round(asc, 6),
