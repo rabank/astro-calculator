@@ -234,21 +234,19 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 import swisseph as swe
 
-def dt_to_jd(date_str: str, time_str: str, tz_str: str):
+def dt_to_jd(date_str: str, time_str: str, tz_str: str, lon: float = 0.0):
     fmt = "%Y-%m-%d %H:%M:%S" if len(time_str.split(":")) == 3 else "%Y-%m-%d %H:%M"
-    dt_naive = datetime.strptime(f"{date_str} {time_str}", fmt)
+    year = int(date_str.split("-")[0])
 
-    # pytz съдържа пълна историческа IANA база — знае кога всяка таймзона
-    # е ползвала LMT и кога е преминала към стандартно време.
-    # Например America/Araguaina за 1911г. автоматично връща LMT -03:13.
-    try:
-        import pytz
-        tz_pytz = pytz.timezone(tz_str)
-        dt_local = tz_pytz.localize(dt_naive, is_dst=None)
-    except Exception:
-        # fallback към zoneinfo ако pytz не е налична или tz_str е невалидна
+    # LMT за дати преди 1900г. — игнорираме таймзоната, ползваме longitude
+    if year < 1900:
+        lmt_offset_hours = lon / 15.0
+        lmt_offset_sec = round(lmt_offset_hours * 3600)
+        tz_lmt = timezone(timedelta(seconds=lmt_offset_sec))
+        dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz_lmt)
+    else:
         tz = _safe_zoneinfo(tz_str)
-        dt_local = dt_naive.replace(tzinfo=tz)
+        dt_local = datetime.strptime(f"{date_str} {time_str}", fmt).replace(tzinfo=tz)
 
     dt_utc = dt_local.astimezone(timezone.utc)
 
@@ -690,38 +688,6 @@ def add_cors(resp):
 def health():
     return jsonify(ok=True), 200
 
-# ---------- TEST ПАЛМАС 1911 ----------
-@app.route("/test-palmas", methods=["GET"])
-def test_palmas():
-    try:
-        import pytz
-        date_str = "1911-12-12"
-        time_str = "12:12:12"
-        tz_str   = "America/Araguaina"
-        lat      = -10.1675
-        lon      = -48.3277
-        from datetime import datetime
-        dt_naive = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")
-        tz_pytz  = pytz.timezone(tz_str)
-        dt_local = tz_pytz.localize(dt_naive, is_dst=None)
-        dt_utc   = dt_local.astimezone(timezone.utc)
-        ut_hour  = dt_utc.hour + dt_utc.minute/60.0 + dt_utc.second/3600.0
-        jd = swe.julday(dt_utc.year, dt_utc.month, dt_utc.day, ut_hour)
-        swe.set_sid_mode(0)
-        spica = swe.fixstar_ut("Spica", jd, swe.FLG_SWIEPH)
-        spica_lon = spica[0][0]
-        ayan_base = (spica_lon - 180.0) % 360.0
-        ayan_dg = ayan_base + float(os.getenv("NK_AYAN_OFFSET_DG", "0.0028959"))
-        houses, ascmc = houses_safe(jd, lat, lon, flags=FLAGS_TROP, hsys=b'P')
-        asc_trop = ascmc[0] % 360.0
-        asc_sid  = (asc_trop - ayan_dg) % 360.0
-        deg  = int(asc_sid % 30)
-        mins = int((asc_sid % 30 - deg) * 60)
-        secs = int(((asc_sid % 30 - deg) * 60 - mins) * 60)
-        return jsonify({"dt_utc": str(dt_utc), "jd": jd, "spica_trop": spica_lon, "ayan_base": ayan_base, "ayan_dg": ayan_dg, "asc_trop": asc_trop, "asc_sid": asc_sid, "asc_formatted": f"{deg}°{mins}'{secs}\"", "tz_offset_sec": int(dt_local.utcoffset().total_seconds())}), 200
-    except Exception as e:
-        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
-
 # ---------- DEBUG ----------
 @app.route('/debug', methods=['GET'], endpoint='nk_debug')
 def debug():
@@ -835,7 +801,7 @@ def calculate():
         tz_str = resolve_timezone(lat, lon, tz_sent)
 
 
-        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str)
+        jd, dt_utc = dt_to_jd(date_str, time_str, tz_str, lon)
         dt_local = dt_utc.astimezone(_safe_zoneinfo(tz_str))
 
         # инфо
@@ -920,8 +886,7 @@ def calculate():
                 "ayan_offset": float(ayan_off),
                 "tz_sent": tz_sent,
                 "tz_used": tz_str,
-                "tz_offset_sec": int(dt_utc.utcoffset().total_seconds()) if dt_utc.utcoffset() else 0,
-                "dt_utc": dt_utc.isoformat()
+                "lmt_used": int(date_str.split("-")[0]) < 1900
             },
             "Ascendant": {
                 "degree": round(asc, 6),
